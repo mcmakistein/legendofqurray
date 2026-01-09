@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Multiplayer Dövüş</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="loginScreen" class="menu-overlay">
+        <div class="menu-box">
+            <h1>DÖVÜŞ ARENASI</h1>
+            <input type="text" id="usernameInput" placeholder="Oyuncu Adını Gir" maxlength="10">
+            <button onclick="joinGame()">OYUNA KATIL</button>
+        </div>
+    </div>
+
+    <div id="lobbyScreen" class="menu-overlay" style="display: none;">
+        <div class="menu-box">
+            <h2>LOBİ</h2>
+            <div id="playerList" class="player-list">
+                <div class="slot">Oyuncu 1 Bekleniyor...</div>
+                <div class="slot">Oyuncu 2 Bekleniyor...</div>
+            </div>
+            
+            <div id="spectatorArea" style="margin-top: 10px; color: gray; font-size: 12px;">
+                İzleyiciler: 0
+            </div>
+
+            <div class="lobby-buttons">
+                <button id="readyBtn" onclick="toggleReady()" disabled>HAZIR OL</button>
+            </div>
+            <p id="statusText">Rakip bekleniyor...</p>
+        </div>
+    </div>
+
+    <div class="game-container" id="gameContainer" style="display: none;">
+        <div class="ui-layer">
+            <div class="health-bar-container">
+                <div class="health-bar-bg"></div>
+                <div class="health-bar" id="playerHealth"></div>
+                <div class="name-tag" id="p1Name">P1</div>
+            </div>
+            <div class="timer">VS</div>
+            <div class="health-bar-container">
+                <div class="health-bar-bg"></div>
+                <div class="health-bar" id="enemyHealth"></div>
+                <div class="name-tag" id="p2Name">P2</div>
+            </div>
+        </div>
+        <canvas></canvas>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

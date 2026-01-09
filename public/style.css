@@ -1,0 +1,97 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: #111;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* MENÜ KAPLAMALARI */
+.menu-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+
+.menu-box {
+    background: #222;
+    padding: 40px;
+    border-radius: 10px;
+    border: 2px solid #444;
+    text-align: center;
+    color: white;
+    width: 400px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.8);
+}
+
+h1, h2 { margin-bottom: 20px; color: #ff4444; }
+
+input {
+    padding: 10px;
+    font-size: 16px;
+    width: 80%;
+    margin-bottom: 20px;
+    border: none;
+    border-radius: 5px;
+    text-align: center;
+}
+
+button {
+    padding: 10px 20px;
+    font-size: 16px;
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+}
+button:hover { background: #218838; }
+button:disabled { background: #555; cursor: not-allowed; }
+
+/* OYUNCU LİSTESİ */
+.player-list { margin: 20px 0; }
+.slot {
+    background: #333;
+    padding: 10px;
+    margin: 5px 0;
+    border-radius: 5px;
+    display: flex;
+    justify-content: space-between;
+}
+.ready-status { font-weight: bold; }
+.ready-yes { color: #00ff00; }
+.ready-no { color: #ff0000; }
+
+/* OYUN İÇİ UI */
+.game-container { position: relative; width: 1024px; height: 576px; }
+canvas { width: 100%; height: 100%; display: block; }
+
+.ui-layer {
+    position: absolute; top: 0; left: 0; width: 100%; padding: 20px;
+    display: flex; justify-content: space-between; align-items: center; pointer-events: none;
+}
+.health-bar-container { position: relative; width: 40%; height: 30px; background-color: #555; border: 2px solid white; }
+.health-bar { position: absolute; top: 0; left: 0; bottom: 0; width: 100%; background-color: #4caf50; transition: width 0.1s; }
+.health-bar-bg { background-color: #818181; width: 100%; height: 100%; }
+.timer { color: white; font-size: 30px; font-weight: bold; text-shadow: 2px 2px 4px #000; }
+.name-tag {
+    position: absolute; top: 35px; color: white; font-weight: bold; font-size: 14px; text-shadow: 1px 1px 2px black;
+}
+#p1Name { left: 0; }
+#p2Name { right: 0; }
