@@ -127,7 +127,11 @@ class Sprite {
         this.image = new Image();
         this.image.src = imgSrc;
         this.image.onload = () => { this.loaded = true; }
-        this.image.onerror = () => { this.loaded = false; }
+        // Hata durumunda konsola yaz (Hata ayıklama için)
+        this.image.onerror = () => { 
+            console.error("YÜKLENEMEDİ:", imgSrc); 
+            this.loaded = false; 
+        }
         this.scale = scale;
         this.framesMax = framesMax;
         this.framesCurrent = 0;
@@ -140,6 +144,7 @@ class Sprite {
 
     draw(isEnemy = false) {
         if (!this.loaded) {
+            // Görsel yoksa renkli kutu çiz
             if (this.framesMax > 1) { 
                 c.fillStyle = isEnemy ? 'blue' : 'red';
                 c.fillRect(this.position.x, this.position.y, 50, 150);
@@ -151,9 +156,8 @@ class Sprite {
         }
 
         c.save(); 
-        // Not: Artık Enemy Assets kullandığımız için Mavi Filtreyi kaldırdım.
-        // Eğer görsellerin yoksa ve mavi olmasını istiyorsan alttaki satırı aç:
-        // if (isEnemy) c.filter = 'hue-rotate(220deg) brightness(1.2)'; 
+        // 2. Oyuncuyu ayırt etmek için renk filtresi
+        if (isEnemy) c.filter = 'hue-rotate(220deg) brightness(1.2)'; 
 
         if (!this.facingRight) {
             const w = this.width || 50; 
@@ -233,12 +237,10 @@ class Fighter extends Sprite {
         if (!this.dead && this.image !== this.sprites.death.image) {
             this.animateFrames();
             
-            // 1. Saldırı Bitiş
             if (this.image === this.sprites.attack1.image && this.framesCurrent === this.sprites.attack1.framesMax - 1) {
                 this.isAttacking = false;
             }
 
-            // 2. Hurt Bitiş
             if (this.image === this.sprites.hurt.image && this.framesCurrent === this.sprites.hurt.framesMax - 1) {
                 this.isStunned = false;
                 this.switchSprite('idle', true); 
@@ -371,57 +373,34 @@ const deathOffset = { x: 10, y: 10 };
 const blockScale = 0.6; 
 const blockOffset = { x: 60, y: -50 }; 
 
-// --- ASSETS TANIMLARI (DÜZELTİLDİ: 2 FARKLI SET) ---
-
-// Player 1 Assets (Klasik)
-const assetsP1 = {
-    idle: './assets/idle.png', 
-    run: './assets/run.png', 
-    attack: './assets/attack.png', 
-    hurt: './assets/hurt.png', 
-    die: './assets/die.png', 
-    block: './assets/block.png', 
-    blockHit: './assets/blockHit.png'
-};
-
-// Player 2 Assets (Enemy Klasörü)
-const assetsP2 = {
-    idle: './assets/enemy/idle.png', 
-    run: './assets/enemy/run.png', 
-    attack: './assets/enemy/attack.png', 
-    hurt: './assets/enemy/hurt.png', 
-    die: './assets/enemy/die.png', 
-    block: './assets/enemy/block.png', 
-    blockHit: './assets/enemy/blockHit.png'
+// Assets
+const assets = {
+    idle: './assets/idle.png', run: './assets/run.png', attack: './assets/attack.png', hurt: './assets/hurt.png', die: './assets/die.png', block: './assets/block.png', blockHit: './assets/blockHit.png'
 };
 
 const player = new Fighter({
-    position: { x: 100, y: 0 }, velocity: { x: 0, y: 0 }, 
-    imgSrc: assetsP1.idle, 
-    framesMax: 10, scale: playerScale, offset: commonOffset,
+    position: { x: 100, y: 0 }, velocity: { x: 0, y: 0 }, imgSrc: assets.idle, framesMax: 10, scale: playerScale, offset: commonOffset,
     sprites: {
-        idle: { imageSrc: assetsP1.idle, framesMax: 10, offset: commonOffset },
-        run: { imageSrc: assetsP1.run, framesMax: 16, offset: commonOffset },
-        attack1: { imageSrc: assetsP1.attack, framesMax: 7, offset: commonOffset }, 
-        hurt: { imageSrc: assetsP1.hurt, framesMax: 4, offset: commonOffset },
-        death: { imageSrc: assetsP1.die, framesMax: 5, scale: deathScale, offset: deathOffset },
-        block: { imageSrc: assetsP1.block, framesMax: 1, scale: blockScale, offset: blockOffset },
-        blockHit: { imageSrc: assetsP1.blockHit, framesMax: 1, scale: blockScale, offset: blockOffset }
+        idle: { imageSrc: assets.idle, framesMax: 10, offset: commonOffset },
+        run: { imageSrc: assets.run, framesMax: 16, offset: commonOffset },
+        attack1: { imageSrc: assets.attack, framesMax: 7, offset: commonOffset }, 
+        hurt: { imageSrc: assets.hurt, framesMax: 4, offset: commonOffset },
+        death: { imageSrc: assets.die, framesMax: 5, scale: deathScale, offset: deathOffset },
+        block: { imageSrc: assets.block, framesMax: 1, scale: blockScale, offset: blockOffset },
+        blockHit: { imageSrc: assets.blockHit, framesMax: 1, scale: blockScale, offset: blockOffset }
     }
 });
 
 const enemy = new Fighter({
-    position: { x: 800, y: 100 }, velocity: { x: 0, y: 0 }, color: 'blue', 
-    imgSrc: assetsP2.idle, // ENEMY ASSETS KULLANILIYOR
-    framesMax: 10, scale: playerScale, offset: commonOffset,
+    position: { x: 800, y: 100 }, velocity: { x: 0, y: 0 }, color: 'blue', imgSrc: assets.idle, framesMax: 10, scale: playerScale, offset: commonOffset,
     sprites: {
-        idle: { imageSrc: assetsP2.idle, framesMax: 10, offset: commonOffset },
-        run: { imageSrc: assetsP2.run, framesMax: 16, offset: commonOffset },
-        attack1: { imageSrc: assetsP2.attack, framesMax: 7, offset: commonOffset },
-        hurt: { imageSrc: assetsP2.hurt, framesMax: 4, offset: commonOffset },
-        death: { imageSrc: assetsP2.die, framesMax: 5, scale: deathScale, offset: deathOffset },
-        block: { imageSrc: assetsP2.block, framesMax: 1, scale: blockScale, offset: blockOffset },
-        blockHit: { imageSrc: assetsP2.blockHit, framesMax: 1, scale: blockScale, offset: blockOffset }
+        idle: { imageSrc: assets.idle, framesMax: 10, offset: commonOffset },
+        run: { imageSrc: assets.run, framesMax: 16, offset: commonOffset },
+        attack1: { imageSrc: assets.attack, framesMax: 7, offset: commonOffset },
+        hurt: { imageSrc: assets.hurt, framesMax: 4, offset: commonOffset },
+        death: { imageSrc: assets.die, framesMax: 5, scale: deathScale, offset: deathOffset },
+        block: { imageSrc: assets.block, framesMax: 1, scale: blockScale, offset: blockOffset },
+        blockHit: { imageSrc: assets.blockHit, framesMax: 1, scale: blockScale, offset: blockOffset }
     }
 });
 enemy.facingRight = false; 
@@ -472,51 +451,42 @@ function animate() {
     player.update(false); 
     enemy.update(true); 
 
-    if (myRole === 'player1') {
-        player.velocity.x = 0;
-        if (!player.dead && !player.isStunned) {
-            if (player.isBlocking) {
-                player.switchSprite('block');
+    // --- TEK KONTROL YAPISI (KENDİ KARAKTERİN) ---
+    // myRole neyse sadece o karakteri yönet.
+    
+    let myChar = null;
+    if (myRole === 'player1') myChar = player;
+    else if (myRole === 'player2') myChar = enemy;
+
+    if (myChar) {
+        myChar.velocity.x = 0;
+        
+        if (!myChar.dead && !myChar.isStunned) {
+            // Blokluyorsa Zıplama/Hareket YOK
+            if (myChar.isBlocking) {
+                myChar.switchSprite('block');
             } 
+            // Normal Hareket
             else {
-                if (keys.a.pressed && player.lastKey === 'a') { player.velocity.x = -5; player.facingRight = false; player.switchSprite('run'); }
-                else if (keys.d.pressed && player.lastKey === 'd') { player.velocity.x = 5; player.facingRight = true; player.switchSprite('run'); }
-                else if (keys.a.pressed) { player.velocity.x = -5; player.facingRight = false; player.switchSprite('run'); }
-                else if (keys.d.pressed) { player.velocity.x = 5; player.facingRight = true; player.switchSprite('run'); }
+                // Not: Hem P1 hem P2 için WASD tuşlarına bakıyoruz (Eşitlenmiş Kontrol)
+                if (keys.a.pressed && myChar.lastKey === 'a') { myChar.velocity.x = -5; myChar.facingRight = false; myChar.switchSprite('run'); }
+                else if (keys.d.pressed && myChar.lastKey === 'd') { myChar.velocity.x = 5; myChar.facingRight = true; myChar.switchSprite('run'); }
+                else if (keys.a.pressed) { myChar.velocity.x = -5; myChar.facingRight = false; myChar.switchSprite('run'); }
+                else if (keys.d.pressed) { myChar.velocity.x = 5; myChar.facingRight = true; myChar.switchSprite('run'); }
                 else {
-                    player.switchSprite('idle');
+                    myChar.switchSprite('idle');
                 }
             }
             
-            if (player.velocity.y !== 0 && !player.isAttacking && !player.isStunned) {
-                player.switchSprite('idle');
+            // Havadaysa Idle
+            if (myChar.velocity.y !== 0 && !myChar.isAttacking && !myChar.isStunned) {
+                myChar.switchSprite('idle');
             }
         }
-        emitMyState(player);
-    } 
-    else if (myRole === 'player2') {
-        enemy.velocity.x = 0;
-        if (!enemy.dead && !enemy.isStunned) {
-            if (enemy.isBlocking) {
-                enemy.switchSprite('block');
-            } 
-            else {
-                if (keys.ArrowLeft.pressed && enemy.lastKey === 'ArrowLeft') { enemy.velocity.x = -5; enemy.facingRight = false; enemy.switchSprite('run'); }
-                else if (keys.ArrowRight.pressed && enemy.lastKey === 'ArrowRight') { enemy.velocity.x = 5; enemy.facingRight = true; enemy.switchSprite('run'); }
-                else if (keys.ArrowLeft.pressed) { enemy.velocity.x = -5; enemy.facingRight = false; enemy.switchSprite('run'); }
-                else if (keys.ArrowRight.pressed) { enemy.velocity.x = 5; enemy.facingRight = true; enemy.switchSprite('run'); }
-                else {
-                    enemy.switchSprite('idle');
-                }
-            }
-
-            if (enemy.velocity.y !== 0 && !enemy.isAttacking && !enemy.isStunned) {
-                enemy.switchSprite('idle');
-            }
-        }
-        emitMyState(enemy);
+        emitMyState(myChar);
     }
 
+    // Çarpışma Kontrolü (Herkes kendi vuruşunu hesaplar)
     if (myRole === 'player1' && player.isAttacking && player.framesCurrent === 4) {
         if (checkCollision(player, enemy)) { player.isAttacking = false; socket.emit('hit', { target: 'player2' }); enemy.takeHit(player); updateHealthBars(); }
     }
@@ -534,36 +504,29 @@ function emitMyState(character) {
     socket.emit('updateState', { role: myRole, x: character.position.x, y: character.position.y, velocityY: character.velocity.y, facingRight: character.facingRight, sprite: character.isBlocking ? 'block' : character.currentSpriteName === 'run' ? 'run' : 'idle' });
 }
 
-const keys = { a: { pressed: false }, d: { pressed: false }, ArrowRight: { pressed: false }, ArrowLeft: { pressed: false } };
+// --- ORTAK KONTROLLER (WASD) ---
+const keys = { a: { pressed: false }, d: { pressed: false } };
 
 window.addEventListener('keydown', (event) => {
     if (!gameRunning) return; 
     
-    if (myRole === 'player1' && !player.dead && !player.isStunned) {
+    // Hangi karakteri kontrol ediyorum?
+    let me = null;
+    if (myRole === 'player1') me = player;
+    else if (myRole === 'player2') me = enemy;
+    else return; // İzleyici
+
+    if (!me.dead && !me.isStunned) {
         switch (event.key) {
-            case 'd': if(!player.isBlocking) { keys.d.pressed = true; player.lastKey = 'd'; } break;
-            case 'a': if(!player.isBlocking) { keys.a.pressed = true; player.lastKey = 'a'; } break;
-            case 'w': if(!player.isBlocking && player.velocity.y === 0) player.velocity.y = -15; break;
-            case ' ': event.preventDefault(); player.attack(); break;
+            case 'd': if(!me.isBlocking) { keys.d.pressed = true; me.lastKey = 'd'; } break;
+            case 'a': if(!me.isBlocking) { keys.a.pressed = true; me.lastKey = 'a'; } break;
+            case 'w': if(!me.isBlocking && me.velocity.y === 0) me.velocity.y = -15; break;
+            case ' ': event.preventDefault(); me.attack(); break;
             case 's': 
-                player.isBlocking = true; 
-                player.canParry = true; 
-                player.velocity.x = 0; 
-                setTimeout(() => { player.canParry = false; }, 400); 
-                break;
-        }
-    }
-    if (myRole === 'player2' && !enemy.dead && !enemy.isStunned) {
-        switch (event.key) {
-            case 'ArrowRight': if(!enemy.isBlocking) { keys.ArrowRight.pressed = true; enemy.lastKey = 'ArrowRight'; } break;
-            case 'ArrowLeft': if(!enemy.isBlocking) { keys.ArrowLeft.pressed = true; enemy.lastKey = 'ArrowLeft'; } break;
-            case 'ArrowUp': if(!enemy.isBlocking && enemy.velocity.y === 0) enemy.velocity.y = -15; break;
-            case '0': enemy.attack(); break;
-            case 'ArrowDown': 
-                enemy.isBlocking = true; 
-                enemy.canParry = true; 
-                enemy.velocity.x = 0;
-                setTimeout(() => { enemy.canParry = false; }, 400); 
+                me.isBlocking = true; 
+                me.canParry = true; 
+                me.velocity.x = 0; 
+                setTimeout(() => { me.canParry = false; }, 400); 
                 break;
         }
     }
@@ -572,18 +535,14 @@ window.addEventListener('keydown', (event) => {
 window.addEventListener('keyup', (event) => {
     if (!gameRunning) return;
     
-    if (myRole === 'player1') { 
-        switch (event.key) { 
-            case 'd': keys.d.pressed = false; break; 
-            case 'a': keys.a.pressed = false; break; 
-            case 's': player.isBlocking = false; player.canParry = false; break; 
-        } 
-    }
-    if (myRole === 'player2') { 
-        switch (event.key) { 
-            case 'ArrowRight': keys.ArrowRight.pressed = false; 
-            case 'ArrowLeft': keys.ArrowLeft.pressed = false; break; 
-            case 'ArrowDown': enemy.isBlocking = false; enemy.canParry = false; break; 
-        } 
-    }
+    let me = null;
+    if (myRole === 'player1') me = player;
+    else if (myRole === 'player2') me = enemy;
+    else return;
+
+    switch (event.key) { 
+        case 'd': keys.d.pressed = false; break; 
+        case 'a': keys.a.pressed = false; break; 
+        case 's': me.isBlocking = false; me.canParry = false; break; 
+    } 
 });
