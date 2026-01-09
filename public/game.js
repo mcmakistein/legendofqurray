@@ -16,14 +16,17 @@ let animationId;
 // HTML Elementleri
 const loginScreen = document.getElementById('loginScreen');
 const lobbyScreen = document.getElementById('lobbyScreen');
+const gameOverScreen = document.getElementById('gameOverScreen');
 const gameContainer = document.getElementById('gameContainer');
 const usernameInput = document.getElementById('usernameInput');
 const readyBtn = document.getElementById('readyBtn');
 const playerListDiv = document.getElementById('playerList');
 const statusText = document.getElementById('statusText');
+const winnerText = document.getElementById('winnerText');
+const scoreBoard = document.getElementById('scoreBoard');
 
 // ==========================================
-// --- MENU VE LOBİ ---
+// --- MENU VE LOBİ İŞLEMLERİ ---
 // ==========================================
 
 function joinGame() {
@@ -77,17 +80,49 @@ socket.on('updateLobby', (players) => {
     document.getElementById('spectatorArea').innerText = `İzleyiciler: ${spectators}`;
 });
 
-socket.on('gameStart', (players) => {
+// --- OYUN BAŞLATMA ---
+socket.on('gameStart', (data) => {
     lobbyScreen.style.display = 'none';
+    gameOverScreen.style.display = 'none';
     gameContainer.style.display = 'block';
+    statusText.innerText = "Rakip bekleniyor...";
     
+    // Skor Sıfırla
+    if(data.scores) scoreBoard.innerText = `${data.scores.p1} - ${data.scores.p2}`;
+
+    const players = data.players;
     const p1 = Object.values(players).find(p => p.role === 'player1');
     const p2 = Object.values(players).find(p => p.role === 'player2');
     
     if(p1 && document.getElementById('p1Name')) document.getElementById('p1Name').innerText = p1.name;
     if(p2 && document.getElementById('p2Name')) document.getElementById('p2Name').innerText = p2.name;
 
-    // RESET
+    resetPositions();
+
+    if (!gameRunning) {
+        gameRunning = true;
+        animate();
+    }
+});
+
+// --- RAUNT YÖNETİMİ ---
+socket.on('updateScore', (scores) => {
+    scoreBoard.innerText = `${scores.p1} - ${scores.p2}`;
+});
+
+socket.on('roundOver', () => {
+    // Burada "Raunt Bitti" yazısı eklenebilir ama şimdilik sadece reset bekleyelim
+    // Oyuncuların hareketini kısıtla
+    player.isStunned = true; 
+    enemy.isStunned = true;
+});
+
+socket.on('startNextRound', () => {
+    resetPositions();
+});
+
+// Pozisyon ve Can Resetleme Fonksiyonu
+function resetPositions() {
     player.health = 100; enemy.health = 100;
     player.dead = false; enemy.dead = false;
     player.isStunned = false; enemy.isStunned = false;
@@ -101,28 +136,36 @@ socket.on('gameStart', (players) => {
     player.switchSprite('idle', true);
     enemy.switchSprite('idle', true);
     updateHealthBars();
+}
 
-    if (!gameRunning) {
-        gameRunning = true;
-        animate();
-    }
+// --- OYUN SONU ---
+socket.on('showGameOver', (data) => {
+    winnerText.innerText = "KAZANAN: " + data.name;
+    gameOverScreen.style.display = 'flex';
 });
 
-socket.on('gameReset', () => {
-    alert("Bir oyuncu ayrıldı! Lobiye dönülüyor.");
+socket.on('gameReset', (data) => {
     gameRunning = false;
     cancelAnimationFrame(animationId);
+    
+    gameOverScreen.style.display = 'none';
     gameContainer.style.display = 'none';
     lobbyScreen.style.display = 'flex';
+    
     readyBtn.innerText = "HAZIR OL";
     readyBtn.style.background = '#28a745';
+
+    if (data && data.message) {
+        statusText.innerText = data.message;
+        statusText.style.color = "#ffcc00"; 
+    }
 });
 
 // ==========================================
 // --- SINIFLAR ---
 // ==========================================
 class Sprite {
-    constructor({ position, imgSrc, scale = 1, framesMax = 1, offset = {x:0, y:0} }) {
+    constructor({ position, imgSrc, scale = 1, framesMax = 1, offset = {x:0, y:0}, framesHold = 3 }) {
         this.position = position;
         this.image = new Image();
         this.image.src = imgSrc;
@@ -132,7 +175,7 @@ class Sprite {
         this.framesMax = framesMax;
         this.framesCurrent = 0;
         this.framesElapsed = 0;
-        this.framesHold = 3; 
+        this.framesHold = framesHold; // Hız ayarı buradan gelir
         this.offset = offset;
         this.facingRight = true; 
         this.loaded = false;
@@ -151,24 +194,13 @@ class Sprite {
         }
 
         c.save(); 
-        
         if (!this.facingRight) {
             const w = this.width || 50; 
             const px = this.position.x + (w / 2);
             c.translate(px, 0); c.scale(-1, 1); c.translate(-px, 0); 
         }
 
-        c.drawImage(
-            this.image,
-            this.framesCurrent * (this.image.width / this.framesMax),
-            0,
-            this.image.width / this.framesMax,
-            this.image.height,
-            this.position.x - this.offset.x,
-            this.position.y - this.offset.y,
-            (this.image.width / this.framesMax) * this.scale,
-            this.image.height * this.scale
-        );
+        c.drawImage(this.image, this.framesCurrent * (this.image.width / this.framesMax), 0, this.image.width / this.framesMax, this.image.height, this.position.x - this.offset.x, this.position.y - this.offset.y, (this.image.width / this.framesMax) * this.scale, this.image.height * this.scale);
         c.restore();
     }
 
@@ -220,23 +252,22 @@ class Fighter extends Sprite {
     update(isEnemy = false) {
         this.draw(isEnemy);
         
+        // Blok Çizimi
         if (this.isBlocking && (!this.sprites.block.image.complete || this.sprites.block.image.naturalWidth === 0)) {
              c.fillStyle = this.canParry ? 'rgba(255, 255, 0, 0.5)' : 'rgba(0, 0, 255, 0.3)';
              c.fillRect(this.position.x, this.position.y, 50, 150);
         }
 
+        // Animasyon
         if (!this.dead && this.image !== this.sprites.death.image) {
             this.animateFrames();
-            
             if (this.image === this.sprites.attack1.image && this.framesCurrent === this.sprites.attack1.framesMax - 1) {
                 this.isAttacking = false;
             }
-
             if (this.image === this.sprites.hurt.image && this.framesCurrent === this.sprites.hurt.framesMax - 1) {
                 this.isStunned = false;
                 this.switchSprite('idle', true); 
             }
-
         } else if (this.image === this.sprites.death.image) {
             if (this.framesCurrent < this.sprites.death.framesMax - 1) {
                 this.framesElapsed++;
@@ -244,6 +275,7 @@ class Fighter extends Sprite {
             } else this.dead = true;
         }
 
+        // Fizik
         this.attackBox.position.x = this.facingRight ? this.position.x + this.attackBox.offset.x : this.position.x - this.attackBox.offset.x - this.attackBox.width + this.width;
         this.attackBox.position.y = this.position.y + this.attackBox.offset.y;
         
@@ -264,13 +296,9 @@ class Fighter extends Sprite {
 
     attack() {
         if(this.isAttacking || this.dead || this.isBlocking || this.isStunned) return; 
-        
         this.switchSprite('attack1');
         this.isAttacking = true;
-        
-        if ((myRole === 'player1' && this === player) || (myRole === 'player2' && this === enemy)) {
-            socket.emit('attack');
-        }
+        if ((myRole === 'player1' && this === player) || (myRole === 'player2' && this === enemy)) socket.emit('attack');
     }
 
     takeHit(attacker) {
@@ -280,9 +308,7 @@ class Fighter extends Sprite {
             this.health -= 2; 
             if (this.health <= 0) { 
                 this.switchSprite('death'); 
-                if ( (myRole === 'player1' && this === player) || (myRole === 'player2' && this === enemy) ) {
-                    socket.emit('playerDied');
-                }
+                if ( (myRole === 'player1' && this === player) || (myRole === 'player2' && this === enemy) ) socket.emit('playerDied');
                 return; 
             }
             this.isBlockHitting = true;
@@ -296,9 +322,7 @@ class Fighter extends Sprite {
         
         if (this.health <= 0) {
             this.switchSprite('death');
-            if ( (myRole === 'player1' && this === player) || (myRole === 'player2' && this === enemy) ) {
-                socket.emit('playerDied');
-            }
+            if ( (myRole === 'player1' && this === player) || (myRole === 'player2' && this === enemy) ) socket.emit('playerDied');
         }
         else this.switchSprite('hurt', true);
     }
@@ -324,8 +348,6 @@ class Fighter extends Sprite {
                     if(this.sprites.blockHit.offset) this.offset = this.sprites.blockHit.offset;
                  } return;
             }
-            
-            // BLOK ÖNCELİĞİ
             if (this.isBlocking && !this.isBlockHitting && sprite !== 'death') {
                  if(this.image !== this.sprites.block.image) {
                     this.image = this.sprites.block.image; this.framesMax = this.sprites.block.framesMax; this.framesCurrent = 0;
@@ -346,13 +368,18 @@ class Fighter extends Sprite {
                 if (this.image !== this.sprites.attack1.image) { this.image = this.sprites.attack1.image; this.framesMax = this.sprites.attack1.framesMax; this.framesCurrent = 0; this.framesHold = 3; this.scale = this.defaultScale; if(this.sprites.attack1.offset) this.offset = this.sprites.attack1.offset; } break;
             case 'death':
                 if (this.image !== this.sprites.death.image) { this.image = this.sprites.death.image; this.framesMax = this.sprites.death.framesMax; this.framesCurrent = 0; this.framesHold = 12; if(this.sprites.death.scale) this.scale = this.sprites.death.scale; if(this.sprites.death.offset) this.offset = this.sprites.death.offset; } break;
+            
+            // --- HURT ANİMASYONUNU YAVAŞLATTIK (framesHold artırıldı) ---
             case 'hurt':
                  if (this.image !== this.sprites.hurt.image) {
-                    this.image = this.sprites.hurt.image; this.framesMax = this.sprites.hurt.framesMax; this.framesCurrent = 0;
-                    this.framesHold = 3;
+                    this.image = this.sprites.hurt.image; 
+                    this.framesMax = this.sprites.hurt.framesMax; 
+                    this.framesCurrent = 0;
+                    this.framesHold = this.sprites.hurt.framesHold || 8; // YAVAŞLATMA BURADA (3 yerine 8)
                     this.scale = this.defaultScale; 
                     if(this.sprites.hurt.offset) this.offset = this.sprites.hurt.offset;
                 } break;
+                
             case 'block':
                  if (this.image !== this.sprites.block.image) {
                     this.image = this.sprites.block.image; this.framesMax = this.sprites.block.framesMax; this.framesCurrent = 0;
@@ -376,13 +403,12 @@ const deathOffset = { x: 10, y: 10 };
 const blockScale = 0.6; 
 const blockOffset = { x: 60, y: -50 }; 
 
-// --- ASSETS ---
 const assetsP1 = {
-    idle: 'assets/idle.png', run: 'assets/run.png', attack: 'assets/attack.png', hurt: 'assets/hurt.png', die: 'assets/die.png', block: 'assets/block.png', blockHit: 'assets/blockhit.png'
+    idle: 'assets/idle.png', run: 'assets/run.png', attack: 'assets/attack.png', hurt: 'assets/hurt.png', die: 'assets/die.png', block: 'assets/block.png', blockHit: 'assets/blockHit.png'
 };
 
 const assetsP2 = {
-    idle: 'assets/enemy/idle.png', run: 'assets/enemy/run.png', attack: 'assets/enemy/attack.png', hurt: 'assets/enemy/hurt.png', die: 'assets/enemy/die.png', block: 'assets/enemy/block.png', blockHit: 'assets/enemy/blockhit.png'
+    idle: 'assets/enemy/idle.png', run: 'assets/enemy/run.png', attack: 'assets/enemy/attack.png', hurt: 'assets/enemy/hurt.png', die: 'assets/enemy/die.png', block: 'assets/enemy/block.png', blockHit: 'assets/enemy/blockHit.png'
 };
 
 const player = new Fighter({
@@ -391,21 +417,20 @@ const player = new Fighter({
         idle: { imageSrc: assetsP1.idle, framesMax: 10, offset: commonOffset },
         run: { imageSrc: assetsP1.run, framesMax: 16, offset: commonOffset },
         attack1: { imageSrc: assetsP1.attack, framesMax: 7, offset: commonOffset }, 
-        hurt: { imageSrc: assetsP1.hurt, framesMax: 4, offset: commonOffset },
+        hurt: { imageSrc: assetsP1.hurt, framesMax: 4, offset: commonOffset, framesHold: 10 }, // HURT YAVAŞLATILDI
         death: { imageSrc: assetsP1.die, framesMax: 5, scale: deathScale, offset: deathOffset },
         block: { imageSrc: assetsP1.block, framesMax: 1, scale: blockScale, offset: blockOffset },
         blockHit: { imageSrc: assetsP1.blockHit, framesMax: 1, scale: blockScale, offset: blockOffset }
     }
 });
 
-// P2 ARTIK ENEMY ASSETS KULLANIYOR
 const enemy = new Fighter({
     position: { x: 800, y: 100 }, velocity: { x: 0, y: 0 }, color: 'blue', imgSrc: assetsP2.idle, framesMax: 10, scale: playerScale, offset: commonOffset,
     sprites: {
         idle: { imageSrc: assetsP2.idle, framesMax: 10, offset: commonOffset },
         run: { imageSrc: assetsP2.run, framesMax: 16, offset: commonOffset },
         attack1: { imageSrc: assetsP2.attack, framesMax: 7, offset: commonOffset },
-        hurt: { imageSrc: assetsP2.hurt, framesMax: 4, offset: commonOffset },
+        hurt: { imageSrc: assetsP2.hurt, framesMax: 4, offset: commonOffset, framesHold: 10 }, // HURT YAVAŞLATILDI
         death: { imageSrc: assetsP2.die, framesMax: 5, scale: deathScale, offset: deathOffset },
         block: { imageSrc: assetsP2.block, framesMax: 1, scale: blockScale, offset: blockOffset },
         blockHit: { imageSrc: assetsP2.blockHit, framesMax: 1, scale: blockScale, offset: blockOffset }
@@ -459,8 +484,7 @@ function animate() {
     player.update(false); 
     enemy.update(true); 
 
-    // --- TEK KONTROL YAPISI ---
-    
+    // --- KONTROL (KENDİ KARAKTERİN) ---
     let myChar = null;
     if (myRole === 'player1') myChar = player;
     else if (myRole === 'player2') myChar = enemy;
@@ -469,13 +493,12 @@ function animate() {
         myChar.velocity.x = 0;
         
         if (!myChar.dead && !myChar.isStunned) {
-            // Blokluyorsa
+            // Sadece Blok
             if (myChar.isBlocking) {
                 myChar.switchSprite('block');
             } 
-            // Hareket
+            // Sadece Hareket
             else {
-                // P2 için de WASD desteği eklendi
                 if (keys.a.pressed && myChar.lastKey === 'a') { myChar.velocity.x = -5; myChar.facingRight = false; myChar.switchSprite('run'); }
                 else if (keys.d.pressed && myChar.lastKey === 'd') { myChar.velocity.x = 5; myChar.facingRight = true; myChar.switchSprite('run'); }
                 else if (keys.a.pressed) { myChar.velocity.x = -5; myChar.facingRight = false; myChar.switchSprite('run'); }
@@ -509,7 +532,7 @@ function emitMyState(character) {
     socket.emit('updateState', { role: myRole, x: character.position.x, y: character.position.y, velocityY: character.velocity.y, facingRight: character.facingRight, sprite: character.isBlocking ? 'block' : character.currentSpriteName === 'run' ? 'run' : 'idle' });
 }
 
-// --- ORTAK KONTROLLER (WASD) ---
+// --- ORTAK KONTROLLER ---
 const keys = { a: { pressed: false }, d: { pressed: false } };
 
 window.addEventListener('keydown', (event) => {
@@ -554,12 +577,13 @@ window.addEventListener('keyup', (event) => {
         case 'd': keys.d.pressed = false; break; 
         case 'a': keys.a.pressed = false; break; 
         case 's': 
+            // BLOK SADECE TUŞ ÇEKİLİNCE BİTER
             me.isBlocking = false; 
             me.canParry = false; 
-            emitMyState(me); // Bırakınca hemen güncelle
+            emitMyState(me);
             break; 
         
-        // P2 Ok tuşları bırakma
+        // P2 Ok tuşları
         case 'ArrowRight': keys.d.pressed = false; break; 
         case 'ArrowLeft': keys.a.pressed = false; break; 
         case 'ArrowDown': me.isBlocking = false; me.canParry = false; emitMyState(me); break; 
