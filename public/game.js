@@ -16,11 +16,13 @@ let animationId;
 // HTML Elementleri
 const loginScreen = document.getElementById('loginScreen');
 const lobbyScreen = document.getElementById('lobbyScreen');
+const gameOverScreen = document.getElementById('gameOverScreen'); // YENİ
 const gameContainer = document.getElementById('gameContainer');
 const usernameInput = document.getElementById('usernameInput');
 const readyBtn = document.getElementById('readyBtn');
 const playerListDiv = document.getElementById('playerList');
 const statusText = document.getElementById('statusText');
+const winnerText = document.getElementById('winnerText'); // YENİ
 
 // ==========================================
 // --- MENU VE LOBİ İŞLEMLERİ ---
@@ -79,6 +81,7 @@ socket.on('updateLobby', (players) => {
 
 socket.on('gameStart', (players) => {
     lobbyScreen.style.display = 'none';
+    gameOverScreen.style.display = 'none'; // Emin olmak için gizle
     gameContainer.style.display = 'block';
     
     const p1 = Object.values(players).find(p => p.role === 'player1');
@@ -93,10 +96,11 @@ socket.on('gameStart', (players) => {
     player.isStunned = false; enemy.isStunned = false;
     player.isBlocking = false; enemy.isBlocking = false;
     player.isAttacking = false; enemy.isAttacking = false;
-    player.velocity.x = 0; enemy.velocity.x = 0;
     
     player.position.x = 100; player.position.y = 0;
     enemy.position.x = 800; enemy.position.y = 100;
+    player.velocity.x = 0; player.velocity.y = 0;
+    enemy.velocity.x = 0; enemy.velocity.y = 0;
     
     player.switchSprite('idle', true);
     enemy.switchSprite('idle', true);
@@ -108,12 +112,21 @@ socket.on('gameStart', (players) => {
     }
 });
 
+// --- OYUN SONU EKRANI GÖSTER ---
+socket.on('showGameOver', (data) => {
+    winnerText.innerText = "KAZANAN: " + data.name;
+    gameOverScreen.style.display = 'flex';
+    // Oyunu arka planda durdurmaya gerek yok, 4sn sonra reset gelecek
+});
+
 socket.on('gameReset', () => {
-    alert("Bir oyuncu ayrıldı! Lobiye dönülüyor.");
     gameRunning = false;
     cancelAnimationFrame(animationId);
+    
+    gameOverScreen.style.display = 'none';
     gameContainer.style.display = 'none';
     lobbyScreen.style.display = 'flex';
+    
     readyBtn.innerText = "HAZIR OL";
     readyBtn.style.background = '#28a745';
 });
@@ -151,7 +164,9 @@ class Sprite {
         }
 
         c.save(); 
-        
+        // Filtre kaldırıldı (İsteğe bağlı açılabilir)
+        // if (isEnemy) c.filter = 'hue-rotate(220deg) brightness(1.2)'; 
+
         if (!this.facingRight) {
             const w = this.width || 50; 
             const px = this.position.x + (w / 2);
@@ -220,21 +235,12 @@ class Fighter extends Sprite {
     update(isEnemy = false) {
         this.draw(isEnemy);
         
-        // --- 1. BLOK MANTIĞI (ÖNCELİKLİ) ---
-        // Eğer karakter blokluyorsa, animasyonu zorla BLOCK yap ve başka hiçbir şeye bakma.
-        if (this.isBlocking && !this.isBlockHitting && !this.dead) {
-            this.switchSprite('block');
-            
-            // Eğer blok resmi yoksa yedek çizim
-            if (!this.sprites.block.image.complete || this.sprites.block.image.naturalWidth === 0) {
-                c.fillStyle = this.canParry ? 'rgba(255, 255, 0, 0.5)' : 'rgba(0, 0, 255, 0.3)';
-                c.fillRect(this.position.x, this.position.y, 50, 150);
-            }
-        } 
-        
-        // --- 2. DİĞER ANİMASYONLAR ---
-        // Sadece bloklamıyorsa çalışır
-        else if (!this.dead && this.image !== this.sprites.death.image) {
+        if (this.isBlocking && (!this.sprites.block.image.complete || this.sprites.block.image.naturalWidth === 0)) {
+             c.fillStyle = this.canParry ? 'rgba(255, 255, 0, 0.5)' : 'rgba(0, 0, 255, 0.3)';
+             c.fillRect(this.position.x, this.position.y, 50, 150);
+        }
+
+        if (!this.dead && this.image !== this.sprites.death.image) {
             this.animateFrames();
             
             if (this.image === this.sprites.attack1.image && this.framesCurrent === this.sprites.attack1.framesMax - 1) {
@@ -253,7 +259,6 @@ class Fighter extends Sprite {
             } else this.dead = true;
         }
 
-        // Fizik
         this.attackBox.position.x = this.facingRight ? this.position.x + this.attackBox.offset.x : this.position.x - this.attackBox.offset.x - this.attackBox.width + this.width;
         this.attackBox.position.y = this.position.y + this.attackBox.offset.y;
         
@@ -288,7 +293,14 @@ class Fighter extends Sprite {
         
         if (this.isBlocking) {
             this.health -= 2; 
-            if (this.health <= 0) { this.switchSprite('death'); return; }
+            if (this.health <= 0) { 
+                this.switchSprite('death'); 
+                // --- BURASI DEĞİŞTİ: Bloklarken ölürse de bildir ---
+                if ( (myRole === 'player1' && this === player) || (myRole === 'player2' && this === enemy) ) {
+                    socket.emit('playerDied');
+                }
+                return; 
+            }
             this.isBlockHitting = true;
             this.switchSprite('blockHit');
             setTimeout(() => { this.isBlockHitting = false; }, 200);
@@ -298,7 +310,13 @@ class Fighter extends Sprite {
         this.health -= 20; 
         this.isStunned = true; 
         
-        if (this.health <= 0) this.switchSprite('death');
+        if (this.health <= 0) {
+            this.switchSprite('death');
+            // --- KİM ÖLDÜYSE SERVERA O HABER VERSİN ---
+            if ( (myRole === 'player1' && this === player) || (myRole === 'player2' && this === enemy) ) {
+                socket.emit('playerDied');
+            }
+        }
         else this.switchSprite('hurt', true);
     }
 
@@ -325,7 +343,6 @@ class Fighter extends Sprite {
                  } return;
             }
             
-            // BLOK KONTROLÜ
             if (this.isBlocking && !this.isBlockHitting && sprite !== 'death') {
                  if(this.image !== this.sprites.block.image) {
                     this.image = this.sprites.block.image; this.framesMax = this.sprites.block.framesMax; this.framesCurrent = 0;
@@ -376,32 +393,17 @@ const deathOffset = { x: 10, y: 10 };
 const blockScale = 0.6; 
 const blockOffset = { x: 60, y: -50 }; 
 
-// --- GÖRSEL YOLLARI ---
-
+// --- ASSETS ---
 const assetsP1 = {
-    idle: 'assets/idle.png', 
-    run: 'assets/run.png', 
-    attack: 'assets/attack.png', 
-    hurt: 'assets/hurt.png', 
-    die: 'assets/die.png', 
-    block: 'assets/block.png', 
-    blockHit: 'assets/blockHit.png'
+    idle: 'assets/idle.png', run: 'assets/run.png', attack: 'assets/attack.png', hurt: 'assets/hurt.png', die: 'assets/die.png', block: 'assets/block.png', blockHit: 'assets/blockHit.png'
 };
 
 const assetsP2 = {
-    idle: 'assets/enemy/idle.png', 
-    run: 'assets/enemy/run.png', 
-    attack: 'assets/enemy/attack.png', 
-    hurt: 'assets/enemy/hurt.png', 
-    die: 'assets/enemy/die.png', 
-    block: 'assets/enemy/block.png', 
-    blockHit: 'assets/enemy/blockHit.png'
+    idle: 'assets/enemy/idle.png', run: 'assets/enemy/run.png', attack: 'assets/enemy/attack.png', hurt: 'assets/enemy/hurt.png', die: 'assets/enemy/die.png', block: 'assets/enemy/block.png', blockHit: 'assets/enemy/blockHit.png'
 };
 
 const player = new Fighter({
-    position: { x: 100, y: 0 }, velocity: { x: 0, y: 0 }, 
-    imgSrc: assetsP1.idle, 
-    framesMax: 10, scale: playerScale, offset: commonOffset,
+    position: { x: 100, y: 0 }, velocity: { x: 0, y: 0 }, imgSrc: assetsP1.idle, framesMax: 10, scale: playerScale, offset: commonOffset,
     sprites: {
         idle: { imageSrc: assetsP1.idle, framesMax: 10, offset: commonOffset },
         run: { imageSrc: assetsP1.run, framesMax: 16, offset: commonOffset },
@@ -414,9 +416,7 @@ const player = new Fighter({
 });
 
 const enemy = new Fighter({
-    position: { x: 800, y: 100 }, velocity: { x: 0, y: 0 }, color: 'blue', 
-    imgSrc: assetsP2.idle, 
-    framesMax: 10, scale: playerScale, offset: commonOffset,
+    position: { x: 800, y: 100 }, velocity: { x: 0, y: 0 }, color: 'blue', imgSrc: assetsP2.idle, framesMax: 10, scale: playerScale, offset: commonOffset,
     sprites: {
         idle: { imageSrc: assetsP2.idle, framesMax: 10, offset: commonOffset },
         run: { imageSrc: assetsP2.run, framesMax: 16, offset: commonOffset },
@@ -436,7 +436,6 @@ socket.on('playerUpdated', (data) => {
     let target = data.role === 'player1' ? player : enemy;
     target.position.x = data.x; target.position.y = data.y; target.facingRight = data.facingRight; target.velocity.y = data.velocityY;
     
-    // Gelen veriye göre Zorla Sprite Değiştir
     if (data.sprite === 'block') { 
         target.isBlocking = true; 
         target.switchSprite('block', true); 
@@ -476,36 +475,49 @@ function animate() {
     player.update(false); 
     enemy.update(true); 
 
-    // --- TEK KONTROL YAPISI ---
-    
-    let myChar = null;
-    if (myRole === 'player1') myChar = player;
-    else if (myRole === 'player2') myChar = enemy;
-
-    if (myChar) {
-        myChar.velocity.x = 0;
-        
-        if (!myChar.dead && !myChar.isStunned) {
-            // Blokluyorsa
-            if (myChar.isBlocking) {
-                myChar.switchSprite('block');
+    if (myRole === 'player1') {
+        player.velocity.x = 0;
+        if (!player.dead && !player.isStunned) {
+            if (player.isBlocking) {
+                player.switchSprite('block');
             } 
-            // Hareket
             else {
-                if (keys.a.pressed && myChar.lastKey === 'a') { myChar.velocity.x = -5; myChar.facingRight = false; myChar.switchSprite('run'); }
-                else if (keys.d.pressed && myChar.lastKey === 'd') { myChar.velocity.x = 5; myChar.facingRight = true; myChar.switchSprite('run'); }
-                else if (keys.a.pressed) { myChar.velocity.x = -5; myChar.facingRight = false; myChar.switchSprite('run'); }
-                else if (keys.d.pressed) { myChar.velocity.x = 5; myChar.facingRight = true; myChar.switchSprite('run'); }
+                if (keys.a.pressed && player.lastKey === 'a') { player.velocity.x = -5; player.facingRight = false; player.switchSprite('run'); }
+                else if (keys.d.pressed && player.lastKey === 'd') { player.velocity.x = 5; player.facingRight = true; player.switchSprite('run'); }
+                else if (keys.a.pressed) { player.velocity.x = -5; player.facingRight = false; player.switchSprite('run'); }
+                else if (keys.d.pressed) { player.velocity.x = 5; player.facingRight = true; player.switchSprite('run'); }
                 else {
-                    myChar.switchSprite('idle');
+                    player.switchSprite('idle');
                 }
             }
             
-            if (myChar.velocity.y !== 0 && !myChar.isAttacking && !myChar.isStunned) {
-                myChar.switchSprite('idle');
+            if (player.velocity.y !== 0 && !player.isAttacking && !player.isStunned) {
+                player.switchSprite('idle');
             }
         }
-        emitMyState(myChar);
+        emitMyState(player);
+    } 
+    else if (myRole === 'player2') {
+        enemy.velocity.x = 0;
+        if (!enemy.dead && !enemy.isStunned) {
+            if (enemy.isBlocking) {
+                enemy.switchSprite('block');
+            } 
+            else {
+                if (keys.ArrowLeft.pressed && enemy.lastKey === 'ArrowLeft') { enemy.velocity.x = -5; enemy.facingRight = false; enemy.switchSprite('run'); }
+                else if (keys.ArrowRight.pressed && enemy.lastKey === 'ArrowRight') { enemy.velocity.x = 5; enemy.facingRight = true; enemy.switchSprite('run'); }
+                else if (keys.ArrowLeft.pressed) { enemy.velocity.x = -5; enemy.facingRight = false; enemy.switchSprite('run'); }
+                else if (keys.ArrowRight.pressed) { enemy.velocity.x = 5; enemy.facingRight = true; enemy.switchSprite('run'); }
+                else {
+                    enemy.switchSprite('idle');
+                }
+            }
+
+            if (enemy.velocity.y !== 0 && !enemy.isAttacking && !enemy.isStunned) {
+                enemy.switchSprite('idle');
+            }
+        }
+        emitMyState(enemy);
     }
 
     if (myRole === 'player1' && player.isAttacking && player.framesCurrent === 4) {
@@ -525,8 +537,7 @@ function emitMyState(character) {
     socket.emit('updateState', { role: myRole, x: character.position.x, y: character.position.y, velocityY: character.velocity.y, facingRight: character.facingRight, sprite: character.isBlocking ? 'block' : character.currentSpriteName === 'run' ? 'run' : 'idle' });
 }
 
-// --- ORTAK KONTROLLER ---
-const keys = { a: { pressed: false }, d: { pressed: false } };
+const keys = { a: { pressed: false }, d: { pressed: false }, ArrowRight: { pressed: false }, ArrowLeft: { pressed: false } };
 
 window.addEventListener('keydown', (event) => {
     if (!gameRunning) return; 
@@ -564,10 +575,9 @@ window.addEventListener('keyup', (event) => {
         case 'd': keys.d.pressed = false; break; 
         case 'a': keys.a.pressed = false; break; 
         case 's': 
-            // TUŞU BIRAKINCA BLOK BİTER VE BİLGİ GÖNDERİLİR
             me.isBlocking = false; 
             me.canParry = false; 
-            emitMyState(me);
+            emitMyState(me); // Anlık güncelleme gönder
             break; 
     } 
 });

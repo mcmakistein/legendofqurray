@@ -50,6 +50,14 @@
         </div>
         <canvas></canvas>
     </div>
+    
+    <div id="gameOverScreen" class="menu-overlay" style="display: none;">
+        <div class="menu-box" style="border-color: gold;">
+            <h1 style="color: gold;">OYUN BİTTİ!</h1>
+            <h2 id="winnerText" style="color: white; margin-top: 20px;">KAZANAN: ...</h2>
+            <p style="color: gray; margin-top: 20px;">Lobiye dönülüyor...</p>
+        </div>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="game.js"></script>
