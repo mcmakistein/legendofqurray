@@ -10,7 +10,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 let players = {};
 let gameStatus = 'LOBBY'; 
-let scores = { p1: 0, p2: 0 }; // SKOR TAKİBİ
+let scores = { p1: 0, p2: 0 }; 
+let isRoundProcessing = false; // YENİ: Raunt karışıklığını önleyen kilit
 
 io.on('connection', (socket) => {
   console.log('Bağlantı:', socket.id);
@@ -28,7 +29,6 @@ io.on('connection', (socket) => {
     };
 
     socket.emit('joined', { role: role });
-    // Yeni giren kişiye mevcut skoru gönder
     socket.emit('updateScore', scores);
     io.emit('updateLobby', players);
 
@@ -45,7 +45,8 @@ io.on('connection', (socket) => {
 
       if (p1 && p2 && p1.isReady && p2.isReady) {
         gameStatus = 'PLAYING';
-        scores = { p1: 0, p2: 0 }; // Maç başı skor sıfırla
+        scores = { p1: 0, p2: 0 }; 
+        isRoundProcessing = false; // Kilidi aç
         io.emit('gameStart', { players, scores });
       }
     }
@@ -55,11 +56,13 @@ io.on('connection', (socket) => {
   socket.on('attack', () => { socket.broadcast.emit('enemyAttack'); });
   socket.on('hit', (data) => { socket.broadcast.emit('enemyHit', data); });
 
-  // --- OYUN BİTİŞ MANTIĞI ---
+  // --- OYUN BİTİŞ VE RAUNT MANTIĞI (DÜZELTİLDİ) ---
   socket.on('playerDied', () => {
-    if (gameStatus !== 'PLAYING') return; 
+    // Eğer oyun oynanmıyorsa veya zaten bir ölüm işlemi yapılıyorsa DUR.
+    if (gameStatus !== 'PLAYING' || isRoundProcessing) return; 
     
-    // Ölen kişiyi bul
+    isRoundProcessing = true; // KİLİTLE
+    
     const loser = players[socket.id];
     if (!loser) return;
 
@@ -69,12 +72,10 @@ io.on('connection', (socket) => {
 
     io.emit('updateScore', scores);
 
-    // KAZANAN VAR MI? (İlk 2 yapan kazanır)
+    // MAÇ BİTTİ Mİ? (2 Olan Kazanır)
     if (scores.p1 >= 2 || scores.p2 >= 2) {
         gameStatus = 'FINISHED';
         let winnerName = scores.p1 > scores.p2 ? "OYUNCU 1" : "OYUNCU 2";
-        
-        // İsmi bulmaya çalış
         const winnerPlayer = Object.values(players).find(p => p.role === (scores.p1 > scores.p2 ? 'player1' : 'player2'));
         if(winnerPlayer) winnerName = winnerPlayer.name;
 
@@ -83,18 +84,20 @@ io.on('connection', (socket) => {
         setTimeout(() => {
             gameStatus = 'LOBBY';
             scores = { p1: 0, p2: 0 };
+            isRoundProcessing = false;
             Object.keys(players).forEach(id => players[id].isReady = false);
             io.emit('gameReset', { message: 'Yeni maç için hazır olun!' });
             io.emit('updateLobby', players);
         }, 4000);
     } 
     else {
-        // RAUNT BİTTİ, DEVAM EDİYORUZ
-        io.emit('roundOver', { scores });
+        // SADECE RAUNT BİTTİ
+        io.emit('roundOver');
         
-        // 3 Saniye sonra yeni raunt başlat (Pozisyonları resetle)
+        // 3 Saniye sonra yeni raunt
         setTimeout(() => {
             if(gameStatus === 'PLAYING') {
+                isRoundProcessing = false; // Kilidi aç
                 io.emit('startNextRound');
             }
         }, 3000);
@@ -107,6 +110,7 @@ io.on('connection', (socket) => {
       delete players[socket.id];
       if (gameStatus === 'PLAYING' && (player.role === 'player1' || player.role === 'player2')) {
         gameStatus = 'LOBBY';
+        isRoundProcessing = false;
         scores = { p1: 0, p2: 0 };
         Object.keys(players).forEach(id => players[id].isReady = false);
         io.emit('gameReset', { message: 'Rakip ayrıldı. Maç iptal.' });
