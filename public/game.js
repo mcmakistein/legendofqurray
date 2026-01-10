@@ -5,7 +5,7 @@ const c = canvas.getContext('2d');
 canvas.width = 1024;
 canvas.height = 576;
 
-// --- FİZİK AYARLARI ---
+// FİZİK
 const gravity = 0.7;
 const platformHeight = 100; 
 const groundLevel = canvas.height - platformHeight;
@@ -50,7 +50,7 @@ function triggerTransition(callback) {
 }
 
 // ==========================================
-// --- MENU VE LOBİ ---
+// --- OYUN MANTIĞI ---
 // ==========================================
 
 function joinGame() {
@@ -104,7 +104,6 @@ socket.on('updateLobby', (players) => {
     document.getElementById('spectatorArea').innerText = `İzleyiciler: ${spectators}`;
 });
 
-// --- OYUN BAŞLATMA ---
 socket.on('gameStart', (data) => {
     lobbyScreen.style.display = 'none';
     gameOverScreen.style.display = 'none';
@@ -147,7 +146,7 @@ socket.on('startNextRound', () => {
 
 function resetPositions() {
     player.health = 100; enemy.health = 100;
-    player.stamina = 100; enemy.stamina = 100; // Stamina Reset
+    player.stamina = 100; enemy.stamina = 100;
 
     player.dead = false; enemy.dead = false;
     player.isStunned = false; enemy.isStunned = false;
@@ -195,7 +194,11 @@ class Sprite {
         this.image = new Image();
         this.image.src = imgSrc;
         this.image.onload = () => { this.loaded = true; }
-        this.image.onerror = () => { this.loaded = false; }
+        // Hata durumunda konsola yaz (ÖNEMLİ)
+        this.image.onerror = () => { 
+            console.error("YÜKLENEMEDİ:", imgSrc); 
+            this.loaded = false; 
+        }
         this.scale = scale;
         this.framesMax = framesMax;
         this.framesCurrent = 0;
@@ -207,6 +210,7 @@ class Sprite {
     }
 
     draw(isEnemy = false) {
+        // Resim yüklenmediyse dikdörtgen çiz
         if (!this.loaded) {
             if (this.framesMax > 1) { 
                 c.fillStyle = isEnemy ? 'blue' : 'red';
@@ -270,11 +274,10 @@ class Fighter extends Sprite {
         this.sprites = sprites;
         this.dead = false;
         
-        // --- STAMINA VE HASAR AYARLARI ---
         this.stamina = 100;
         this.maxStamina = 100;
         this.staminaRegenRate = 0.5; 
-        this.attackCost = 35; // Stamina Maliyeti Arttırıldı (Spam Engelleyici)
+        this.attackCost = 35;
         
         this.isBlocking = false;
         this.canParry = false; 
@@ -293,7 +296,6 @@ class Fighter extends Sprite {
     update(isEnemy = false, dt = 1) {
         this.draw(isEnemy);
         
-        // Stamina Yenileme
         if (!this.isAttacking && !this.isBlocking && !this.dead && !this.isStunned) {
             if (this.stamina < this.maxStamina) {
                 this.stamina += this.staminaRegenRate * dt;
@@ -309,13 +311,11 @@ class Fighter extends Sprite {
         if (!this.dead && this.image !== this.sprites.death.image) {
             this.animateFrames();
             
-            // Saldırı Bitiş
             if (this.image === this.sprites.attack1.image && this.framesCurrent === this.sprites.attack1.framesMax - 1) {
                 this.isAttacking = false;
                 this.switchSprite('idle', true);
             }
 
-            // Hurt Bitiş
             if (this.image === this.sprites.hurt.image && this.framesCurrent === this.sprites.hurt.framesMax - 1) {
                 this.isStunned = false;
                 this.switchSprite('idle', true); 
@@ -328,22 +328,16 @@ class Fighter extends Sprite {
             } else this.dead = true;
         }
 
-        // Fizik (DT ile)
         this.position.x += this.velocity.x * dt;
         this.position.y += this.velocity.y * dt;
 
-        // Ekran Sınırları
         if (this.position.x < 0) this.position.x = 0;
         if (this.position.x + this.width > canvas.width) this.position.x = canvas.width - this.width;
 
-        // Yerçekimi
         if (this.position.y + this.height + this.velocity.y >= groundLevel) { 
             this.velocity.y = 0; 
             this.position.y = groundLevel - this.height; 
-            
-            if (this.isBlocking || this.isStunned) {
-                this.velocity.x = 0;
-            }
+            if (this.isBlocking || this.isStunned) this.velocity.x = 0;
         } else {
             this.velocity.y += gravity * dt;
         }
@@ -353,12 +347,10 @@ class Fighter extends Sprite {
     }
 
     attack() {
-        if (this.stamina < this.attackCost) return; // Stamina yetersizse saldırma
-
+        if (this.stamina < this.attackCost) return;
         if(this.isAttacking || this.dead || this.isBlocking || this.isStunned) return; 
         
-        this.stamina -= this.attackCost; // Stamina harca
-
+        this.stamina -= this.attackCost;
         this.switchSprite('attack1');
         this.isAttacking = true;
         if ((myRole === 'player1' && this === player) || (myRole === 'player2' && this === enemy)) socket.emit('attack');
@@ -380,7 +372,6 @@ class Fighter extends Sprite {
             return;
         }
 
-        // --- HASAR DÜŞÜRÜLDÜ: 20 -> 10 ---
         this.health -= 10; 
         this.isStunned = true; 
         
@@ -462,19 +453,13 @@ const deathOffset = { x: 10, y: 10 };
 const blockScale = 0.6; 
 const blockOffset = { x: 60, y: -50 }; 
 
+// --- GÖRSEL YOLLARI (DÜZELTİLDİ: ./ YOK) ---
 const assetsP1 = {
-    idle: 'assets/idle.png', run: 'assets/run.png', attack: 'assets/attack.png', hurt: 'assets/hurt.png', die: 'assets/die.png', block: 'assets/block.png', blockHit: 'assets/blockhit.png'
+    idle: 'assets/idle.png', run: 'assets/run.png', attack: 'assets/attack.png', hurt: 'assets/hurt.png', die: 'assets/die.png', block: 'assets/block.png', blockHit: 'assets/blockHit.png'
 };
 
-// --- DÜZELTME: P2 BlockHit görseli küçük harf (blockhit.png) ---
 const assetsP2 = {
-    idle: 'assets/enemy/idle.png', 
-    run: 'assets/enemy/run.png', 
-    attack: 'assets/enemy/attack.png', 
-    hurt: 'assets/enemy/hurt.png', 
-    die: 'assets/enemy/die.png', 
-    block: 'assets/enemy/block.png', 
-    blockHit: 'assets/enemy/blockhit.png' // Küçük harf yapıldı
+    idle: 'assets/enemy/idle.png', run: 'assets/enemy/run.png', attack: 'assets/enemy/attack.png', hurt: 'assets/enemy/hurt.png', die: 'assets/enemy/die.png', block: 'assets/enemy/block.png', blockHit: 'assets/enemy/blockhit.png'
 };
 
 const player = new Fighter({
@@ -637,11 +622,7 @@ window.addEventListener('keyup', (event) => {
     switch (event.key) { 
         case 'd': keys.d.pressed = false; break; 
         case 'a': keys.a.pressed = false; break; 
-        case 's': 
-            me.isBlocking = false; 
-            me.canParry = false; 
-            emitMyState(me);
-            break; 
+        case 's': me.isBlocking = false; me.canParry = false; emitMyState(me); break; 
         case 'ArrowRight': keys.d.pressed = false; break; 
         case 'ArrowLeft': keys.a.pressed = false; break; 
         case 'ArrowDown': me.isBlocking = false; me.canParry = false; emitMyState(me); break; 
