@@ -5,9 +5,11 @@ const c = canvas.getContext('2d');
 canvas.width = 1024;
 canvas.height = 576;
 
-// FİZİK
+// --- FİZİK AYARLARI ---
 const gravity = 0.7;
-const platformHeight = 100; 
+// NOT: Fiziksel zemin yüksekliği hala burası. 
+// Eğer karakterler görseldeki toprağa tam basmıyorsa bu değeri (110) değiştirmen gerekebilir.
+const platformHeight = 110; 
 const groundLevel = canvas.height - platformHeight;
 
 let myRole = 'spectator';
@@ -50,7 +52,7 @@ function triggerTransition(callback) {
 }
 
 // ==========================================
-// --- OYUN MANTIĞI ---
+// --- MENU VE LOBİ İŞLEMLERİ ---
 // ==========================================
 
 function joinGame() {
@@ -104,6 +106,7 @@ socket.on('updateLobby', (players) => {
     document.getElementById('spectatorArea').innerText = `İzleyiciler: ${spectators}`;
 });
 
+// --- OYUN BAŞLATMA ---
 socket.on('gameStart', (data) => {
     lobbyScreen.style.display = 'none';
     gameOverScreen.style.display = 'none';
@@ -186,19 +189,68 @@ socket.on('gameReset', (data) => {
 });
 
 // ==========================================
-// --- SINIFLAR ---
+// --- GÖRSEL SINIFLAR ---
 // ==========================================
+
+// --- 1. KAYAN ARKAPLAN ---
+class ScrollingSprite {
+    constructor({ imgSrc, speed = 0.5 }) { 
+        this.image = new Image();
+        this.image.src = imgSrc;
+        this.x = 0;
+        this.speed = speed;
+        this.loaded = false;
+        this.image.onload = () => { 
+            this.loaded = true; 
+            this.scaleFactor = canvas.height / this.image.height;
+            this.scaledWidth = this.image.width * this.scaleFactor;
+            this.scaledHeight = canvas.height;
+        }
+    }
+
+    update(dt) {
+        if (!this.loaded) return;
+        this.x -= this.speed * dt;
+        if (this.x <= -this.scaledWidth) this.x = 0;
+        c.drawImage(this.image, this.x, 0, this.scaledWidth, this.scaledHeight);
+        c.drawImage(this.image, this.x + this.scaledWidth, 0, this.scaledWidth, this.scaledHeight);
+        if (this.scaledWidth < canvas.width) c.drawImage(this.image, this.x + (this.scaledWidth * 2), 0, this.scaledWidth, this.scaledHeight);
+    }
+}
+
+// --- 2. ZEMİN (TAM EKRAN ÖN PLAN KATMANI - DÜZELTİLDİ) ---
+class GroundSprite {
+    constructor({ imgSrc }) {
+        this.image = new Image();
+        this.image.src = imgSrc;
+        this.loaded = false;
+        this.image.onload = () => { 
+            this.loaded = true;
+            // Artık ölçekleme veya döşeme hesaplaması yok.
+            // Doğrudan tam ekrana yayacağız.
+        }
+    }
+
+    update() {
+        if (this.loaded) {
+            // Resmi (0,0) noktasından başlatıp tüm canvas'a yayıyoruz.
+            // Bu görsel arkaplanın ÜSTÜNE, karakterlerin ALTINA çizilecek.
+            c.drawImage(this.image, 0, 0, canvas.width, canvas.height);
+        } else {
+            // Yedek (Fiziksel zemin seviyesini göstermek için)
+            c.fillStyle = '#2e7d32'; 
+            c.fillRect(0, groundLevel, canvas.width, platformHeight);
+        }
+    }
+}
+
 class Sprite {
     constructor({ position, imgSrc, scale = 1, framesMax = 1, offset = {x:0, y:0}, framesHold = 3 }) {
         this.position = position;
         this.image = new Image();
         this.image.src = imgSrc;
         this.image.onload = () => { this.loaded = true; }
-        // Hata durumunda konsola yaz (ÖNEMLİ)
-        this.image.onerror = () => { 
-            console.error("YÜKLENEMEDİ:", imgSrc); 
-            this.loaded = false; 
-        }
+        this.image.onerror = () => { this.loaded = false; }
         this.scale = scale;
         this.framesMax = framesMax;
         this.framesCurrent = 0;
@@ -210,14 +262,10 @@ class Sprite {
     }
 
     draw(isEnemy = false) {
-        // Resim yüklenmediyse dikdörtgen çiz
         if (!this.loaded) {
             if (this.framesMax > 1) { 
                 c.fillStyle = isEnemy ? 'blue' : 'red';
                 c.fillRect(this.position.x, this.position.y, 50, 150);
-            } else { 
-                c.fillStyle = '#2e7d32'; 
-                c.fillRect(0, 0, canvas.width, canvas.height);
             }
             return;
         }
@@ -277,7 +325,7 @@ class Fighter extends Sprite {
         this.stamina = 100;
         this.maxStamina = 100;
         this.staminaRegenRate = 0.5; 
-        this.attackCost = 35;
+        this.attackCost = 35; 
         
         this.isBlocking = false;
         this.canParry = false; 
@@ -337,6 +385,7 @@ class Fighter extends Sprite {
         if (this.position.y + this.height + this.velocity.y >= groundLevel) { 
             this.velocity.y = 0; 
             this.position.y = groundLevel - this.height; 
+            
             if (this.isBlocking || this.isStunned) this.velocity.x = 0;
         } else {
             this.velocity.y += gravity * dt;
@@ -442,10 +491,12 @@ class Fighter extends Sprite {
 }
 
 // ==========================================
-// --- AYARLAR ---
+// --- AYARLAR VE NESNELER ---
 // ==========================================
 
-const background = new Sprite({ position: { x: 0, y: 0 }, imgSrc: 'assets/background.png' });
+const background = new ScrollingSprite({ imgSrc: 'assets/background.png', speed: 0.5 });
+const ground = new GroundSprite({ imgSrc: 'assets/ground.png' });
+
 const playerScale = 2.5; 
 const commonOffset = { x: 96, y: 52 };
 const deathScale = 0.8; 
@@ -453,7 +504,6 @@ const deathOffset = { x: 10, y: 10 };
 const blockScale = 0.6; 
 const blockOffset = { x: 60, y: -50 }; 
 
-// --- GÖRSEL YOLLARI (DÜZELTİLDİ: ./ YOK) ---
 const assetsP1 = {
     idle: 'assets/idle.png', run: 'assets/run.png', attack: 'assets/attack.png', hurt: 'assets/hurt.png', die: 'assets/die.png', block: 'assets/block.png', blockHit: 'assets/blockHit.png'
 };
@@ -525,11 +575,16 @@ function animate() {
     const dt = (now - lastTime) / (1000 / 60); 
     lastTime = now;
 
+    // 1. Ekranı temizle
     c.clearRect(0, 0, canvas.width, canvas.height);
-    c.fillStyle = '#2e7d32'; c.fillRect(0, 0, canvas.width, canvas.height);
-    background.update(false, dt); 
-    c.fillStyle = 'rgba(255, 255, 255, 0.2)'; c.fillRect(0, groundLevel, canvas.width, platformHeight);
+    
+    // 2. Arkaplanı Çiz (En Arkada)
+    background.update(dt); 
+    
+    // 3. Zemini Çiz (Ön Plan Katmanı - Tam Ekran)
+    ground.update();
 
+    // 4. Karakterleri Çiz (En Önde)
     player.update(false, dt); 
     enemy.update(true, dt); 
     updateHealthBars();
