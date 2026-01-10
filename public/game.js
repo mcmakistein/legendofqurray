@@ -440,11 +440,11 @@ const blockScale = 0.6;
 const blockOffset = { x: 60, y: -50 }; 
 
 const assetsP1 = {
-    idle: 'assets/idle.png', run: 'assets/run.png', attack: 'assets/attack.png', hurt: 'assets/hurt.png', die: 'assets/die.png', block: 'assets/block.png', blockHit: 'assets/blockHit.png'
+    idle: 'assets/idle.png', run: 'assets/run.png', attack: 'assets/attack.png', hurt: 'assets/hurt.png', die: 'assets/die.png', block: 'assets/block.png', blockHit: 'assets/blockhit.png'
 };
 
 const assetsP2 = {
-    idle: 'assets/enemy/idle.png', run: 'assets/enemy/run.png', attack: 'assets/enemy/attack.png', hurt: 'assets/enemy/hurt.png', die: 'assets/enemy/die.png', block: 'assets/enemy/block.png', blockHit: 'assets/enemy/blockHit.png'
+    idle: 'assets/enemy/idle.png', run: 'assets/enemy/run.png', attack: 'assets/enemy/attack.png', hurt: 'assets/enemy/hurt.png', die: 'assets/enemy/die.png', block: 'assets/enemy/block.png', blockHit: 'assets/enemy/blockhit.png'
 };
 
 const player = new Fighter({
