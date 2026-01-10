@@ -1,97 +1,422 @@
+/* GENEL AYARLAR */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    user-select: none; /* Yazı seçmeyi engelle */
 }
 
 body {
-    background-color: #111;
+    background-color: #050505;
+    background-image: radial-gradient(circle at center, #1a1a1a 0%, #000 100%);
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
     overflow: hidden;
+    font-family: 'Rajdhani', sans-serif; /* Modern, okunaklı font */
 }
 
-/* MENÜ KAPLAMALARI */
-.menu-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
+/* OYUN KONTEYNERİ */
+.game-container {
+    position: relative;
+    width: 1024px;
+    height: 576px;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
+    border: 2px solid #333;
+}
+
+canvas {
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.9);
+    display: block;
+}
+
+/* --- MENÜ TASARIMLARI --- */
+.menu-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.85);
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 10;
+    z-index: 20;
+    backdrop-filter: blur(5px);
 }
 
-.menu-box {
-    background: #222;
-    padding: 40px;
-    border-radius: 10px;
-    border: 2px solid #444;
+.glass-effect {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 50px;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
     text-align: center;
-    color: white;
-    width: 400px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    width: 450px;
+    position: relative;
 }
 
-h1, h2 { margin-bottom: 20px; color: #ff4444; }
+/* YAZI TİPLERİ VE RENKLER */
+h1.glitch-title {
+    font-family: 'Press Start 2P', cursive; /* Piksel font */
+    color: #ff4444;
+    font-size: 28px;
+    text-shadow: 4px 4px #000;
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
 
+.subtitle {
+    color: #888;
+    font-size: 14px;
+    letter-spacing: 5px;
+    margin-bottom: 30px;
+}
+
+/* INPUT ALANI */
 input {
-    padding: 10px;
-    font-size: 16px;
-    width: 80%;
-    margin-bottom: 20px;
-    border: none;
-    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 2px solid #444;
+    padding: 15px;
+    color: white;
+    font-size: 18px;
+    font-family: 'Press Start 2P', cursive;
+    width: 100%;
     text-align: center;
+    margin-bottom: 25px;
+    transition: 0.3s;
 }
 
-button {
-    padding: 10px 20px;
-    font-size: 16px;
-    background: #28a745;
+input:focus {
+    outline: none;
+    border-color: #ff4444;
+    box-shadow: 0 0 15px rgba(255, 68, 68, 0.3);
+}
+
+/* BUTONLAR */
+.cyber-btn {
+    background: linear-gradient(90deg, #ff4444, #cc0000);
     color: white;
     border: none;
-    border-radius: 5px;
+    padding: 15px 30px;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 14px;
     cursor: pointer;
-    font-weight: bold;
+    width: 100%;
+    transition: 0.2s;
+    box-shadow: 0 5px 0 #880000;
 }
-button:hover { background: #218838; }
-button:disabled { background: #555; cursor: not-allowed; }
 
-/* OYUNCU LİSTESİ */
-.player-list { margin: 20px 0; }
+.cyber-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 0 #880000;
+    filter: brightness(1.2);
+}
+
+.cyber-btn:active {
+    transform: translateY(5px);
+    box-shadow: 0 0 0 #880000;
+}
+
+.cyber-btn:disabled {
+    background: #444;
+    box-shadow: none;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* LOBİ LİSTESİ */
+.player-list {
+    margin: 20px 0;
+    text-align: left;
+}
+
 .slot {
-    background: #333;
-    padding: 10px;
-    margin: 5px 0;
-    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 15px;
+    margin-bottom: 10px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    border-left: 4px solid #444;
+    font-weight: bold;
+    color: #ddd;
 }
-.ready-status { font-weight: bold; }
-.ready-yes { color: #00ff00; }
-.ready-no { color: #ff0000; }
 
-/* OYUN İÇİ UI */
-.game-container { position: relative; width: 1024px; height: 576px; }
-canvas { width: 100%; height: 100%; display: block; }
+.ready-yes { color: #00ff00; text-shadow: 0 0 10px #00ff00; }
+.ready-no { color: #ff4444; }
 
+/* HUD (CAN BARLARI) */
 .ui-layer {
-    position: absolute; top: 0; left: 0; width: 100%; padding: 20px;
-    display: flex; justify-content: space-between; align-items: center; pointer-events: none;
+    position: absolute;
+    top: 0; left: 0; width: 100%;
+    padding: 20px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
 }
-.health-bar-container { position: relative; width: 40%; height: 30px; background-color: #555; border: 2px solid white; }
-.health-bar { position: absolute; top: 0; left: 0; bottom: 0; width: 100%; background-color: #4caf50; transition: width 0.1s; }
-.health-bar-bg { background-color: #818181; width: 100%; height: 100%; }
-.timer { color: white; font-size: 30px; font-weight: bold; text-shadow: 2px 2px 4px #000; }
+
+.player-hud {
+    width: 35%; /* 40% yerine 35% yaptık. Ortaya %30 boşluk bıraktık. */
+    position: relative;
+    z-index: 1; /* Garanti olsun diye katman sırasını belirledik */
+}
+
+.health-bar-wrap {
+    height: 35px;
+    background: #333;
+    border: 3px solid #fff;
+    position: relative;
+    transform: skewX(-15deg); /* Barlara eğiklik ver */
+    overflow: hidden;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+}
+
+.health-bar-inner {
+    height: 100%;
+    background: linear-gradient(90deg, #ffcc00, #ff0000); /* Sarıdan Kırmızıya */
+    width: 100%;
+    position: absolute;
+    top: 0;
+    transition: width 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Yumuşak geçiş */
+    z-index: 2;
+}
+
+/* P2 İÇİN TERS ÇEVİRME */
+.p2-wrap {
+    /* Sağdan sola azalması için */
+    transform: skewX(15deg); 
+}
+
+.p2-bar {
+    right: 0; /* Sağdan başla */
+    background: linear-gradient(90deg, #0055ff, #00ccff); /* Maviden Açık Maviye */
+}
+
 .name-tag {
-    position: absolute; top: 35px; color: white; font-weight: bold; font-size: 14px; text-shadow: 1px 1px 2px black;
+    font-family: 'Press Start 2P', cursive;
+    color: white;
+    font-size: 16px;
+    margin-top: 10px;
+    text-shadow: 2px 2px 0 #000;
 }
-#p1Name { left: 0; }
-#p2Name { right: 0; }
+
+.p1-tag { float: left; margin-left: 10px; color: #ff4444; }
+.p2-tag { float: right; margin-right: 10px; color: #00ccff; }
+
+/* ... Önceki kodlar ... */
+
+/* SKOR TABLOSU */
+.timer-box {
+    text-align: center;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 30px; /* Genişliği artırdık */
+    border-radius: 0 0 15px 15px;
+    border: 2px solid white;
+    border-top: none;
+    min-width: 180px; /* Minimum genişlik verdik ki sıkışmasın */
+    z-index: 10;
+    
+    /* Ortalamayı garantiye almak için */
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.vs-text {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 800;
+    color: #ffd700;
+    font-size: 20px;
+    margin-bottom: 5px;
+}
+
+.score-text {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 28px; /* Yazıyı azıcık küçülttük sığsın diye */
+    color: white;
+    letter-spacing: 2px; /* Harf aralığını biraz azalttık */
+    white-space: nowrap; /* KRİTİK KOD: Asla alt satıra geçme! */
+}
+
+/* ... Sonraki kodlar ... */
+/* ANİMASYONLAR */
+.pulsing-text {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
+}
+
+.winner-title {
+    font-family: 'Press Start 2P';
+    color: gold;
+    font-size: 36px;
+    text-shadow: 0 0 20px gold;
+    animation: bounce 1s infinite alternate;
+}
+
+@keyframes bounce {
+    from { transform: translateY(0); }
+    to { transform: translateY(-10px); }
+}
+
+/* ... Önceki tüm kodların kalsın ... */
+
+/* --- YENİ RETRO TASARIMLAR --- */
+
+/* 1. RETRO DURUM YAZILARI */
+#statusText {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 14px;
+    margin-top: 20px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.retro-alert {
+    color: #ff3333; /* Kırmızı */
+    text-shadow: 2px 2px 0px #500;
+    animation: flash 0.5s infinite;
+}
+
+.retro-info {
+    color: #33ff33; /* Yeşil */
+    text-shadow: 2px 2px 0px #050;
+    animation: bounce 1s infinite alternate;
+}
+
+@keyframes flash {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* 2. CRT/TÜPLÜ TV EFEKTİ (GAME OVER İÇİN) */
+.scanlines {
+    background: linear-gradient(
+        to bottom,
+        rgba(255,255,255,0),
+        rgba(255,255,255,0) 50%,
+        rgba(0,0,0,0.2) 50%,
+        rgba(0,0,0,0.2)
+    );
+    background-size: 100% 4px;
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 5;
+    pointer-events: none;
+    border-radius: 15px;
+}
+
+/* 3. KÜP GEÇİŞ ANİMASYONU */
+.transition-layer {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    display: grid;
+    grid-template-columns: repeat(10, 1fr); /* 10 Sütun */
+    grid-template-rows: repeat(10, 1fr);    /* 10 Satır */
+    pointer-events: none;
+    z-index: 100; /* En üstte */
+}
+
+.pixel-cube {
+    background-color: #000;
+    width: 100%;
+    height: 100%;
+    transform: scale(0); /* Başlangıçta görünmez */
+    transition: transform 0.3s ease-in-out;
+    border: 1px solid #111; /* Izgara görünümü */
+}
+
+.pixel-cube.active {
+    transform: scale(1); /* Ekranı kapla */
+}
+/* --- RETRO KUTU TASARIMI (YENİ) --- */
+.retro-box {
+    background-color: #000;
+    padding: 40px;
+    width: 500px;
+    text-align: center;
+    position: relative;
+    /* Piksel Çerçeve Efekti (Box Shadow ile) */
+    box-shadow: 
+        -4px 0 0 0 white,
+        4px 0 0 0 white,
+        0 -4px 0 0 white,
+        0 4px 0 0 white,
+        -4px -4px 0 0 white,
+        4px -4px 0 0 white,
+        -4px 4px 0 0 white,
+        4px 4px 0 0 white,
+        0 0 0 4px #000; /* Dış Siyahlık */
+    image-rendering: pixelated;
+}
+
+/* Maç Bitti Yazısı */
+.retro-title {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 40px;
+    color: #ff0000;
+    text-shadow: 4px 4px 0px #500000;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    animation: glitch 1s infinite;
+}
+
+/* Kazanan Yazısı */
+.retro-winner {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 20px;
+    color: #ffff00; /* Sarı */
+    margin-bottom: 30px;
+    line-height: 1.5;
+}
+
+/* Geri Sayım Yazısı */
+.retro-text {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 12px;
+    color: #00ff00; /* Yeşil Terminal Rengi */
+    animation: blink 0.5s infinite step-end;
+}
+
+@keyframes blink {
+    50% { opacity: 0; }
+}
+
+@keyframes glitch {
+    0% { transform: translate(0); }
+    20% { transform: translate(-2px, 2px); }
+    40% { transform: translate(-2px, -2px); }
+    60% { transform: translate(2px, 2px); }
+    80% { transform: translate(2px, -2px); }
+    100% { transform: translate(0); }
+}
+
+/* --- KÜP GEÇİŞ ANİMASYONU (Eğer silindiyse diye tekrar veriyorum) --- */
+.transition-layer {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    grid-template-rows: repeat(10, 1fr);
+    pointer-events: none;
+    z-index: 100;
+}
+
+.pixel-cube {
+    background-color: #000;
+    width: 100%; height: 100%;
+    transform: scale(0);
+    transition: transform 0.3s ease-in-out;
+    border: 1px solid #111;
+}
+
+.pixel-cube.active { transform: scale(1); }

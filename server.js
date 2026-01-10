@@ -11,7 +11,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 let players = {};
 let gameStatus = 'LOBBY'; 
 let scores = { p1: 0, p2: 0 }; 
-let isRoundProcessing = false; // YENİ: Raunt karışıklığını önleyen kilit
+let isRoundProcessing = false; // Kritik Kilit
 
 io.on('connection', (socket) => {
   console.log('Bağlantı:', socket.id);
@@ -46,19 +46,23 @@ io.on('connection', (socket) => {
       if (p1 && p2 && p1.isReady && p2.isReady) {
         gameStatus = 'PLAYING';
         scores = { p1: 0, p2: 0 }; 
-        isRoundProcessing = false; // Kilidi aç
+        isRoundProcessing = false;
         io.emit('gameStart', { players, scores });
       }
     }
   });
 
-  socket.on('updateState', (data) => { socket.broadcast.emit('playerUpdated', data); });
-  socket.on('attack', () => { socket.broadcast.emit('enemyAttack'); });
-  socket.on('hit', (data) => { socket.broadcast.emit('enemyHit', data); });
+  socket.on('updateState', (data) => { 
+      // Raunt bitiş işlemi sırasındaysa hareket verilerini yoksay
+      if(!isRoundProcessing) socket.broadcast.emit('playerUpdated', data); 
+  });
+  
+  socket.on('attack', () => { if(!isRoundProcessing) socket.broadcast.emit('enemyAttack'); });
+  socket.on('hit', (data) => { if(!isRoundProcessing) socket.broadcast.emit('enemyHit', data); });
 
-  // --- OYUN BİTİŞ VE RAUNT MANTIĞI (DÜZELTİLDİ) ---
+  // --- ÖLÜM VE RAUNT YÖNETİMİ ---
   socket.on('playerDied', () => {
-    // Eğer oyun oynanmıyorsa veya zaten bir ölüm işlemi yapılıyorsa DUR.
+    // Kilit varsa veya oyun oynamıyorsa işlemi durdur
     if (gameStatus !== 'PLAYING' || isRoundProcessing) return; 
     
     isRoundProcessing = true; // KİLİTLE
@@ -66,13 +70,13 @@ io.on('connection', (socket) => {
     const loser = players[socket.id];
     if (!loser) return;
 
-    // Skoru güncelle
+    // Skoru tersine ver (Ölen kaybetti)
     if (loser.role === 'player1') scores.p2++;
     else if (loser.role === 'player2') scores.p1++;
 
     io.emit('updateScore', scores);
 
-    // MAÇ BİTTİ Mİ? (2 Olan Kazanır)
+    // OYUN BİTTİ Mİ? (2 Olan kazanır)
     if (scores.p1 >= 2 || scores.p2 >= 2) {
         gameStatus = 'FINISHED';
         let winnerName = scores.p1 > scores.p2 ? "OYUNCU 1" : "OYUNCU 2";
@@ -91,14 +95,13 @@ io.on('connection', (socket) => {
         }, 4000);
     } 
     else {
-        // SADECE RAUNT BİTTİ
-        io.emit('roundOver');
+        // --- YENİ RAUNT HAZIRLIĞI ---
+        io.emit('roundOver'); // Herkesi dondur
         
-        // 3 Saniye sonra yeni raunt
         setTimeout(() => {
             if(gameStatus === 'PLAYING') {
                 isRoundProcessing = false; // Kilidi aç
-                io.emit('startNextRound');
+                io.emit('startNextRound'); // Pozisyonları sıfırla ve başlat
             }
         }, 3000);
     }

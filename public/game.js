@@ -5,7 +5,7 @@ const c = canvas.getContext('2d');
 canvas.width = 1024;
 canvas.height = 576;
 
-// --- FİZİK DEĞERLERİ (DT uyumlu hassas ayar) ---
+// FİZİK
 const gravity = 0.7;
 const platformHeight = 100; 
 const groundLevel = canvas.height - platformHeight;
@@ -13,7 +13,7 @@ const groundLevel = canvas.height - platformHeight;
 let myRole = 'spectator';
 let gameRunning = false; 
 let animationId;
-let lastTime = Date.now(); // ZAMAN SAYACI
+let lastTime = Date.now(); 
 
 // HTML Elementleri
 const loginScreen = document.getElementById('loginScreen');
@@ -26,9 +26,41 @@ const playerListDiv = document.getElementById('playerList');
 const statusText = document.getElementById('statusText');
 const winnerText = document.getElementById('winnerText');
 const scoreBoard = document.getElementById('scoreBoard');
+const transitionLayer = document.getElementById('transitionLayer'); // KÜP KATMANI
 
 // ==========================================
-// --- MENU VE LOBİ ---
+// --- KÜP ANİMASYONU KURULUMU ---
+// ==========================================
+function initTransition() {
+    if (!transitionLayer) return;
+    transitionLayer.innerHTML = '';
+    for (let i = 0; i < 100; i++) {
+        const div = document.createElement('div');
+        div.classList.add('pixel-cube');
+        transitionLayer.appendChild(div);
+    }
+}
+initTransition();
+
+function triggerTransition(callback) {
+    const cubes = document.querySelectorAll('.pixel-cube');
+    // Kapan (Siyah Ekran)
+    cubes.forEach((cube, index) => {
+        setTimeout(() => { cube.classList.add('active'); }, index * 5); // Biraz hızlandırdım
+    });
+
+    // İşlem Yap
+    setTimeout(() => {
+        if (callback) callback();
+        // Açıl (Normal Ekran)
+        cubes.forEach((cube, index) => {
+            setTimeout(() => { cube.classList.remove('active'); }, index * 5);
+        });
+    }, 1000); // 1 saniye bekle
+}
+
+// ==========================================
+// --- OYUN MANTIĞI ---
 // ==========================================
 
 function joinGame() {
@@ -82,7 +114,6 @@ socket.on('updateLobby', (players) => {
     document.getElementById('spectatorArea').innerText = `İzleyiciler: ${spectators}`;
 });
 
-// --- OYUN BAŞLATMA ---
 socket.on('gameStart', (data) => {
     lobbyScreen.style.display = 'none';
     gameOverScreen.style.display = 'none';
@@ -102,10 +133,10 @@ socket.on('gameStart', (data) => {
 
     if (!gameRunning) {
         gameRunning = true;
-        lastTime = Date.now(); // ZAMANI SIFIRLA (Işınlanmayı önler)
+        lastTime = Date.now();
         animate();
     } else {
-        lastTime = Date.now(); // Yeni rauntta da zamanı sıfırla
+        lastTime = Date.now();
     }
 });
 
@@ -120,7 +151,7 @@ socket.on('roundOver', () => {
 
 socket.on('startNextRound', () => {
     resetPositions();
-    lastTime = Date.now(); // Yeni raunt için zamanı sıfırla
+    lastTime = Date.now();
 });
 
 function resetPositions() {
@@ -140,25 +171,30 @@ function resetPositions() {
 }
 
 socket.on('showGameOver', (data) => {
-    winnerText.innerText = "KAZANAN: " + data.name;
+    winnerText.innerText = "KAZANAN:\n" + data.name; // \n ile alt satıra geçirdik
     gameOverScreen.style.display = 'flex';
 });
 
+// --- ANİMASYONLU RESET (DÜZELDİ) ---
 socket.on('gameReset', (data) => {
-    gameRunning = false;
-    cancelAnimationFrame(animationId);
-    
-    gameOverScreen.style.display = 'none';
-    gameContainer.style.display = 'none';
-    lobbyScreen.style.display = 'flex';
-    
-    readyBtn.innerText = "HAZIR OL";
-    readyBtn.style.background = '#28a745';
+    // Küp animasyonunu başlat
+    triggerTransition(() => {
+        // Ekran kararınca burası çalışır:
+        gameRunning = false;
+        cancelAnimationFrame(animationId);
+        
+        gameOverScreen.style.display = 'none';
+        gameContainer.style.display = 'none';
+        lobbyScreen.style.display = 'flex';
+        
+        readyBtn.innerText = "HAZIR OL";
+        readyBtn.style.background = '#28a745';
 
-    if (data && data.message) {
-        statusText.innerText = data.message;
-        statusText.style.color = "#ffcc00"; 
-    }
+        if (data && data.message) {
+            statusText.innerText = data.message;
+            statusText.style.color = "#ffcc00"; 
+        }
+    });
 });
 
 // ==========================================
@@ -200,17 +236,7 @@ class Sprite {
             c.translate(px, 0); c.scale(-1, 1); c.translate(-px, 0); 
         }
 
-        c.drawImage(
-            this.image,
-            this.framesCurrent * (this.image.width / this.framesMax),
-            0,
-            this.image.width / this.framesMax,
-            this.image.height,
-            this.position.x - this.offset.x,
-            this.position.y - this.offset.y,
-            (this.image.width / this.framesMax) * this.scale,
-            this.image.height * this.scale
-        );
+        c.drawImage(this.image, this.framesCurrent * (this.image.width / this.framesMax), 0, this.image.width / this.framesMax, this.image.height, this.position.x - this.offset.x, this.position.y - this.offset.y, (this.image.width / this.framesMax) * this.scale, this.image.height * this.scale);
         c.restore();
     }
 
@@ -225,7 +251,6 @@ class Sprite {
         }
     }
 
-    // UPDATE ARTIK DELTA TIME (dt) ALIYOR
     update(isEnemy = false, dt = 1) {
         this.draw(isEnemy);
         this.animateFrames();
@@ -260,7 +285,6 @@ class Fighter extends Sprite {
         }
     }
 
-    // --- YENİ UPDATE (DT VE SINIRLAR EKLENDİ) ---
     update(isEnemy = false, dt = 1) {
         this.draw(isEnemy);
         
@@ -269,16 +293,20 @@ class Fighter extends Sprite {
              c.fillRect(this.position.x, this.position.y, 50, 150);
         }
 
-        // Animasyon
         if (!this.dead && this.image !== this.sprites.death.image) {
             this.animateFrames();
+            
+            // SALDIRI BITINCE ZORLA IDLE'A DÖN
             if (this.image === this.sprites.attack1.image && this.framesCurrent === this.sprites.attack1.framesMax - 1) {
                 this.isAttacking = false;
+                this.switchSprite('idle', true);
             }
+
             if (this.image === this.sprites.hurt.image && this.framesCurrent === this.sprites.hurt.framesMax - 1) {
                 this.isStunned = false;
                 this.switchSprite('idle', true); 
             }
+
         } else if (this.image === this.sprites.death.image) {
             if (this.framesCurrent < this.sprites.death.framesMax - 1) {
                 this.framesElapsed++;
@@ -286,30 +314,23 @@ class Fighter extends Sprite {
             } else this.dead = true;
         }
 
-        // --- FİZİK (DT ÇARPIMI EKLENDİ) ---
-        // Hızı dt ile çarpıyoruz (60 FPS'e normalize)
         this.position.x += this.velocity.x * dt;
         this.position.y += this.velocity.y * dt;
 
-        // --- EKRAN SINIRLARI (BOUNDARY CHECK) ---
         if (this.position.x < 0) this.position.x = 0;
         if (this.position.x + this.width > canvas.width) this.position.x = canvas.width - this.width;
 
-        // --- YERÇEKİMİ ---
         if (this.position.y + this.height + this.velocity.y >= groundLevel) { 
             this.velocity.y = 0; 
             this.position.y = groundLevel - this.height; 
             
-            // Yerdeyken Blok veya Stun varsa hareket yok
             if (this.isBlocking || this.isStunned) {
                 this.velocity.x = 0;
             }
         } else {
-            // Havadayken yerçekimi (dt ile)
             this.velocity.y += gravity * dt;
         }
 
-        // Hitbox
         this.attackBox.position.x = this.facingRight ? this.position.x + this.attackBox.offset.x : this.position.x - this.attackBox.offset.x - this.attackBox.width + this.width;
         this.attackBox.position.y = this.position.y + this.attackBox.offset.y;
     }
@@ -391,7 +412,7 @@ class Fighter extends Sprite {
             case 'hurt':
                  if (this.image !== this.sprites.hurt.image) {
                     this.image = this.sprites.hurt.image; this.framesMax = this.sprites.hurt.framesMax; this.framesCurrent = 0;
-                    this.framesHold = 10; // YAVAŞ
+                    this.framesHold = 10; 
                     this.scale = this.defaultScale; 
                     if(this.sprites.hurt.offset) this.offset = this.sprites.hurt.offset;
                 } break;
@@ -482,7 +503,6 @@ function animate() {
     animationId = window.requestAnimationFrame(animate);
     if(!gameRunning) return; 
 
-    // --- DELTA TIME ---
     const now = Date.now();
     const dt = (now - lastTime) / (1000 / 60); 
     lastTime = now;
@@ -492,7 +512,6 @@ function animate() {
     background.update(false, dt); 
     c.fillStyle = 'rgba(255, 255, 255, 0.2)'; c.fillRect(0, groundLevel, canvas.width, platformHeight);
 
-    // --- DT GÖNDERİLİYOR ---
     player.update(false, dt); 
     enemy.update(true, dt); 
 
@@ -541,7 +560,7 @@ function emitMyState(character) {
     socket.emit('updateState', { role: myRole, x: character.position.x, y: character.position.y, velocityY: character.velocity.y, facingRight: character.facingRight, sprite: character.isBlocking ? 'block' : character.currentSpriteName === 'run' ? 'run' : 'idle' });
 }
 
-// --- ORTAK KONTROLLER (WASD) ---
+// --- ORTAK KONTROLLER ---
 const keys = { a: { pressed: false }, d: { pressed: false } };
 
 window.addEventListener('keydown', (event) => {
@@ -564,7 +583,6 @@ window.addEventListener('keydown', (event) => {
                 me.velocity.x = 0; 
                 setTimeout(() => { me.canParry = false; }, 400); 
                 break;
-            // P2 Ok tuşları
             case 'ArrowRight': if(!me.isBlocking) { keys.d.pressed = true; me.lastKey = 'd'; } break;
             case 'ArrowLeft': if(!me.isBlocking) { keys.a.pressed = true; me.lastKey = 'a'; } break;
             case 'ArrowUp': if(!me.isBlocking && me.velocity.y === 0) me.velocity.y = -15; break;
