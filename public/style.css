@@ -420,3 +420,29 @@ input:focus {
 }
 
 .pixel-cube.active { transform: scale(1); }
+/* ... Önceki tüm kodlar kalsın, bunları en alta ekle ... */
+
+/* STAMINA BAR TASARIMI */
+.stamina-bar-wrap {
+    height: 10px; /* İnce bar */
+    background: #222;
+    border: 2px solid #555;
+    margin-top: 5px; /* Can barından biraz aşağıda */
+    position: relative;
+    transform: skewX(-15deg);
+    overflow: hidden;
+}
+
+.stamina-bar-inner {
+    height: 100%;
+    background: linear-gradient(90deg, #ffff00, #ffaa00); /* Sarı Enerji Rengi */
+    width: 100%;
+    transition: width 0.1s linear;
+}
+
+/* P2 STAMINA (SAĞDAN SOLA) */
+.p2-stamina-bar {
+    background: linear-gradient(90deg, #00ffff, #0088ff); /* Mavi Enerji Rengi */
+    right: 0;
+    position: absolute;
+}

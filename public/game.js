@@ -5,7 +5,7 @@ const c = canvas.getContext('2d');
 canvas.width = 1024;
 canvas.height = 576;
 
-// FİZİK
+// --- FİZİK AYARLARI ---
 const gravity = 0.7;
 const platformHeight = 100; 
 const groundLevel = canvas.height - platformHeight;
@@ -26,11 +26,9 @@ const playerListDiv = document.getElementById('playerList');
 const statusText = document.getElementById('statusText');
 const winnerText = document.getElementById('winnerText');
 const scoreBoard = document.getElementById('scoreBoard');
-const transitionLayer = document.getElementById('transitionLayer'); // KÜP KATMANI
+const transitionLayer = document.getElementById('transitionLayer');
 
-// ==========================================
-// --- KÜP ANİMASYONU KURULUMU ---
-// ==========================================
+// --- KÜP GEÇİŞ ANİMASYONU ---
 function initTransition() {
     if (!transitionLayer) return;
     transitionLayer.innerHTML = '';
@@ -44,23 +42,15 @@ initTransition();
 
 function triggerTransition(callback) {
     const cubes = document.querySelectorAll('.pixel-cube');
-    // Kapan (Siyah Ekran)
-    cubes.forEach((cube, index) => {
-        setTimeout(() => { cube.classList.add('active'); }, index * 5); // Biraz hızlandırdım
-    });
-
-    // İşlem Yap
+    cubes.forEach((cube, index) => { setTimeout(() => { cube.classList.add('active'); }, index * 5); });
     setTimeout(() => {
         if (callback) callback();
-        // Açıl (Normal Ekran)
-        cubes.forEach((cube, index) => {
-            setTimeout(() => { cube.classList.remove('active'); }, index * 5);
-        });
-    }, 1000); // 1 saniye bekle
+        cubes.forEach((cube, index) => { setTimeout(() => { cube.classList.remove('active'); }, index * 5); });
+    }, 1000);
 }
 
 // ==========================================
-// --- OYUN MANTIĞI ---
+// --- MENU VE LOBİ ---
 // ==========================================
 
 function joinGame() {
@@ -114,6 +104,7 @@ socket.on('updateLobby', (players) => {
     document.getElementById('spectatorArea').innerText = `İzleyiciler: ${spectators}`;
 });
 
+// --- OYUN BAŞLATMA ---
 socket.on('gameStart', (data) => {
     lobbyScreen.style.display = 'none';
     gameOverScreen.style.display = 'none';
@@ -156,6 +147,8 @@ socket.on('startNextRound', () => {
 
 function resetPositions() {
     player.health = 100; enemy.health = 100;
+    player.stamina = 100; enemy.stamina = 100; // Stamina Reset
+
     player.dead = false; enemy.dead = false;
     player.isStunned = false; enemy.isStunned = false;
     player.isBlocking = false; enemy.isBlocking = false;
@@ -171,22 +164,18 @@ function resetPositions() {
 }
 
 socket.on('showGameOver', (data) => {
-    winnerText.innerText = "KAZANAN:\n" + data.name; // \n ile alt satıra geçirdik
+    winnerText.innerText = "KAZANAN:\n" + data.name;
     gameOverScreen.style.display = 'flex';
 });
 
-// --- ANİMASYONLU RESET (DÜZELDİ) ---
 socket.on('gameReset', (data) => {
-    // Küp animasyonunu başlat
     triggerTransition(() => {
-        // Ekran kararınca burası çalışır:
         gameRunning = false;
         cancelAnimationFrame(animationId);
         
         gameOverScreen.style.display = 'none';
         gameContainer.style.display = 'none';
         lobbyScreen.style.display = 'flex';
-        
         readyBtn.innerText = "HAZIR OL";
         readyBtn.style.background = '#28a745';
 
@@ -236,7 +225,17 @@ class Sprite {
             c.translate(px, 0); c.scale(-1, 1); c.translate(-px, 0); 
         }
 
-        c.drawImage(this.image, this.framesCurrent * (this.image.width / this.framesMax), 0, this.image.width / this.framesMax, this.image.height, this.position.x - this.offset.x, this.position.y - this.offset.y, (this.image.width / this.framesMax) * this.scale, this.image.height * this.scale);
+        c.drawImage(
+            this.image,
+            this.framesCurrent * (this.image.width / this.framesMax),
+            0,
+            this.image.width / this.framesMax,
+            this.image.height,
+            this.position.x - this.offset.x,
+            this.position.y - this.offset.y,
+            (this.image.width / this.framesMax) * this.scale,
+            this.image.height * this.scale
+        );
         c.restore();
     }
 
@@ -271,6 +270,12 @@ class Fighter extends Sprite {
         this.sprites = sprites;
         this.dead = false;
         
+        // --- STAMINA VE HASAR AYARLARI ---
+        this.stamina = 100;
+        this.maxStamina = 100;
+        this.staminaRegenRate = 0.5; 
+        this.attackCost = 35; // Stamina Maliyeti Arttırıldı (Spam Engelleyici)
+        
         this.isBlocking = false;
         this.canParry = false; 
         this.parryWindow = 400; 
@@ -288,6 +293,14 @@ class Fighter extends Sprite {
     update(isEnemy = false, dt = 1) {
         this.draw(isEnemy);
         
+        // Stamina Yenileme
+        if (!this.isAttacking && !this.isBlocking && !this.dead && !this.isStunned) {
+            if (this.stamina < this.maxStamina) {
+                this.stamina += this.staminaRegenRate * dt;
+                if (this.stamina > this.maxStamina) this.stamina = this.maxStamina;
+            }
+        }
+
         if (this.isBlocking && (!this.sprites.block.image.complete || this.sprites.block.image.naturalWidth === 0)) {
              c.fillStyle = this.canParry ? 'rgba(255, 255, 0, 0.5)' : 'rgba(0, 0, 255, 0.3)';
              c.fillRect(this.position.x, this.position.y, 50, 150);
@@ -296,12 +309,13 @@ class Fighter extends Sprite {
         if (!this.dead && this.image !== this.sprites.death.image) {
             this.animateFrames();
             
-            // SALDIRI BITINCE ZORLA IDLE'A DÖN
+            // Saldırı Bitiş
             if (this.image === this.sprites.attack1.image && this.framesCurrent === this.sprites.attack1.framesMax - 1) {
                 this.isAttacking = false;
                 this.switchSprite('idle', true);
             }
 
+            // Hurt Bitiş
             if (this.image === this.sprites.hurt.image && this.framesCurrent === this.sprites.hurt.framesMax - 1) {
                 this.isStunned = false;
                 this.switchSprite('idle', true); 
@@ -314,12 +328,15 @@ class Fighter extends Sprite {
             } else this.dead = true;
         }
 
+        // Fizik (DT ile)
         this.position.x += this.velocity.x * dt;
         this.position.y += this.velocity.y * dt;
 
+        // Ekran Sınırları
         if (this.position.x < 0) this.position.x = 0;
         if (this.position.x + this.width > canvas.width) this.position.x = canvas.width - this.width;
 
+        // Yerçekimi
         if (this.position.y + this.height + this.velocity.y >= groundLevel) { 
             this.velocity.y = 0; 
             this.position.y = groundLevel - this.height; 
@@ -336,7 +353,12 @@ class Fighter extends Sprite {
     }
 
     attack() {
+        if (this.stamina < this.attackCost) return; // Stamina yetersizse saldırma
+
         if(this.isAttacking || this.dead || this.isBlocking || this.isStunned) return; 
+        
+        this.stamina -= this.attackCost; // Stamina harca
+
         this.switchSprite('attack1');
         this.isAttacking = true;
         if ((myRole === 'player1' && this === player) || (myRole === 'player2' && this === enemy)) socket.emit('attack');
@@ -358,7 +380,8 @@ class Fighter extends Sprite {
             return;
         }
 
-        this.health -= 20; 
+        // --- HASAR DÜŞÜRÜLDÜ: 20 -> 10 ---
+        this.health -= 10; 
         this.isStunned = true; 
         
         if (this.health <= 0) {
@@ -443,8 +466,15 @@ const assetsP1 = {
     idle: 'assets/idle.png', run: 'assets/run.png', attack: 'assets/attack.png', hurt: 'assets/hurt.png', die: 'assets/die.png', block: 'assets/block.png', blockHit: 'assets/blockhit.png'
 };
 
+// --- DÜZELTME: P2 BlockHit görseli küçük harf (blockhit.png) ---
 const assetsP2 = {
-    idle: 'assets/enemy/idle.png', run: 'assets/enemy/run.png', attack: 'assets/enemy/attack.png', hurt: 'assets/enemy/hurt.png', die: 'assets/enemy/die.png', block: 'assets/enemy/block.png', blockHit: 'assets/enemy/blockhit.png'
+    idle: 'assets/enemy/idle.png', 
+    run: 'assets/enemy/run.png', 
+    attack: 'assets/enemy/attack.png', 
+    hurt: 'assets/enemy/hurt.png', 
+    die: 'assets/enemy/die.png', 
+    block: 'assets/enemy/block.png', 
+    blockHit: 'assets/enemy/blockhit.png' // Küçük harf yapıldı
 };
 
 const player = new Fighter({
@@ -497,6 +527,9 @@ function updateHealthBars() {
     const eHealth = (enemy.health / 100) * 100;
     document.querySelector('#playerHealth').style.width = (pHealth < 0 ? 0 : pHealth) + '%';
     document.querySelector('#enemyHealth').style.width = (eHealth < 0 ? 0 : eHealth) + '%';
+
+    document.querySelector('#p1Stamina').style.width = player.stamina + '%';
+    document.querySelector('#p2Stamina').style.width = enemy.stamina + '%';
 }
 
 function animate() {
@@ -514,6 +547,7 @@ function animate() {
 
     player.update(false, dt); 
     enemy.update(true, dt); 
+    updateHealthBars();
 
     let myChar = null;
     if (myRole === 'player1') myChar = player;
@@ -603,8 +637,11 @@ window.addEventListener('keyup', (event) => {
     switch (event.key) { 
         case 'd': keys.d.pressed = false; break; 
         case 'a': keys.a.pressed = false; break; 
-        case 's': me.isBlocking = false; me.canParry = false; emitMyState(me); break; 
-        
+        case 's': 
+            me.isBlocking = false; 
+            me.canParry = false; 
+            emitMyState(me);
+            break; 
         case 'ArrowRight': keys.d.pressed = false; break; 
         case 'ArrowLeft': keys.a.pressed = false; break; 
         case 'ArrowDown': me.isBlocking = false; me.canParry = false; emitMyState(me); break; 
