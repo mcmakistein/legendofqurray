@@ -7,8 +7,6 @@ canvas.height = 576;
 
 // --- FİZİK AYARLARI ---
 const gravity = 0.7;
-// NOT: Fiziksel zemin yüksekliği hala burası. 
-// Eğer karakterler görseldeki toprağa tam basmıyorsa bu değeri (110) değiştirmen gerekebilir.
 const platformHeight = 110; 
 const groundLevel = canvas.height - platformHeight;
 
@@ -16,6 +14,26 @@ let myRole = 'spectator';
 let gameRunning = false; 
 let animationId;
 let lastTime = Date.now(); 
+
+// --- SES EFEKTLERİ (YENİ) ---
+// 1. Arkaplan Müziği
+const bgMusic = new Audio('assets/music.mp3');
+bgMusic.loop = true; 
+bgMusic.volume = 0.3; 
+let isMusicOn = true;
+
+// 2. Efekt Sesleri
+const audioAttack = new Audio('assets/attack.mp3');
+const audioHurt = new Audio('assets/hurt.mp3');
+const audioBlockHit = new Audio('assets/blockhit.mp3');
+
+// Seslerin üst üste binmesi için yardımcı fonksiyon
+// (Hızlı basınca sesin bitmesini beklemeden baştan çalar)
+function playSound(audio) {
+    if (!audio) return;
+    audio.currentTime = 0; // Başa sar
+    audio.play().catch(e => console.log("Ses hatası:", e));
+}
 
 // HTML Elementleri
 const loginScreen = document.getElementById('loginScreen');
@@ -29,6 +47,7 @@ const statusText = document.getElementById('statusText');
 const winnerText = document.getElementById('winnerText');
 const scoreBoard = document.getElementById('scoreBoard');
 const transitionLayer = document.getElementById('transitionLayer');
+const musicBtn = document.getElementById('musicBtn');
 
 // --- KÜP GEÇİŞ ANİMASYONU ---
 function initTransition() {
@@ -69,6 +88,19 @@ function joinGame() {
 function toggleReady() {
     socket.emit('playerReady');
     readyBtn.style.background = readyBtn.style.background === 'rgb(204, 204, 0)' ? '#28a745' : '#cccc00';
+}
+
+function toggleMusic() {
+    isMusicOn = !isMusicOn;
+    if (isMusicOn) {
+        musicBtn.innerText = "SES: AÇIK";
+        musicBtn.style.background = "linear-gradient(90deg, #0088ff, #0055ff)";
+        if(gameRunning) bgMusic.play();
+    } else {
+        musicBtn.innerText = "SES: KAPALI";
+        musicBtn.style.background = "#444";
+        bgMusic.pause();
+    }
 }
 
 socket.on('joined', (data) => {
@@ -113,14 +145,23 @@ socket.on('gameStart', (data) => {
     gameContainer.style.display = 'block';
     statusText.innerText = "Rakip bekleniyor...";
     
+    // Müzik Başlat
+    if (isMusicOn) {
+        bgMusic.currentTime = 0; 
+        bgMusic.play().catch(e => console.log("Müzik hatası:", e));
+    }
+
     if(data.scores) scoreBoard.innerText = `${data.scores.p1} - ${data.scores.p2}`;
 
     const players = data.players;
-    const p1 = Object.values(players).find(p => p.role === 'player1');
-    const p2 = Object.values(players).find(p => p.role === 'player2');
+    const p1Data = Object.values(players).find(p => p.role === 'player1');
+    const p2Data = Object.values(players).find(p => p.role === 'player2');
     
-    if(p1 && document.getElementById('p1Name')) document.getElementById('p1Name').innerText = p1.name;
-    if(p2 && document.getElementById('p2Name')) document.getElementById('p2Name').innerText = p2.name;
+    if(p1Data) document.getElementById('p1Name').innerText = p1Data.name;
+    if(p2Data) document.getElementById('p2Name').innerText = p2Data.name;
+
+    if(p1Data) player.nameTag = p1Data.name.toUpperCase();
+    if(p2Data) enemy.nameTag = p2Data.name.toUpperCase();
 
     resetPositions();
 
@@ -175,6 +216,9 @@ socket.on('gameReset', (data) => {
         gameRunning = false;
         cancelAnimationFrame(animationId);
         
+        bgMusic.pause();
+        bgMusic.currentTime = 0;
+
         gameOverScreen.style.display = 'none';
         gameContainer.style.display = 'none';
         lobbyScreen.style.display = 'flex';
@@ -192,7 +236,6 @@ socket.on('gameReset', (data) => {
 // --- GÖRSEL SINIFLAR ---
 // ==========================================
 
-// --- 1. KAYAN ARKAPLAN ---
 class ScrollingSprite {
     constructor({ imgSrc, speed = 0.5 }) { 
         this.image = new Image();
@@ -218,26 +261,18 @@ class ScrollingSprite {
     }
 }
 
-// --- 2. ZEMİN (TAM EKRAN ÖN PLAN KATMANI - DÜZELTİLDİ) ---
 class GroundSprite {
     constructor({ imgSrc }) {
         this.image = new Image();
         this.image.src = imgSrc;
         this.loaded = false;
-        this.image.onload = () => { 
-            this.loaded = true;
-            // Artık ölçekleme veya döşeme hesaplaması yok.
-            // Doğrudan tam ekrana yayacağız.
-        }
+        this.image.onload = () => { this.loaded = true; }
     }
 
     update() {
         if (this.loaded) {
-            // Resmi (0,0) noktasından başlatıp tüm canvas'a yayıyoruz.
-            // Bu görsel arkaplanın ÜSTÜNE, karakterlerin ALTINA çizilecek.
             c.drawImage(this.image, 0, 0, canvas.width, canvas.height);
         } else {
-            // Yedek (Fiziksel zemin seviyesini göstermek için)
             c.fillStyle = '#2e7d32'; 
             c.fillRect(0, groundLevel, canvas.width, platformHeight);
         }
@@ -309,7 +344,7 @@ class Sprite {
 }
 
 class Fighter extends Sprite {
-    constructor({ position, velocity, color = 'red', imgSrc, framesMax = 1, offset = {x:0, y:0}, sprites, scale = 1 }) {
+    constructor({ position, velocity, color = 'red', imgSrc, framesMax = 1, offset = {x:0, y:0}, sprites, scale = 1, nameTag = '' }) {
         super({ position, imgSrc, scale, framesMax, offset });
         this.defaultScale = scale; 
         this.velocity = velocity;
@@ -321,6 +356,7 @@ class Fighter extends Sprite {
         this.health = 100;
         this.sprites = sprites;
         this.dead = false;
+        this.color = color; 
         
         this.stamina = 100;
         this.maxStamina = 100;
@@ -334,6 +370,7 @@ class Fighter extends Sprite {
         this.isBlockHitting = false; 
         
         this.currentSpriteName = 'idle';
+        this.nameTag = nameTag;
 
         for (const sprite in this.sprites) {
             sprites[sprite].image = new Image();
@@ -341,8 +378,43 @@ class Fighter extends Sprite {
         }
     }
 
+    drawLabel() {
+        if (this.dead || !this.nameTag) return;
+
+        c.save();
+        c.font = '10px "Press Start 2P"';
+        c.textAlign = 'center';
+        
+        const yOffset = 40; 
+        const xPos = this.position.x + (this.width / 2);
+        const yPos = this.position.y + yOffset; 
+
+        c.fillStyle = 'black';
+        c.fillText(this.nameTag, xPos + 1, yPos + 1); 
+        c.fillStyle = this.color === 'red' ? '#ff3333' : '#3399ff';
+        c.fillText(this.nameTag, xPos, yPos);
+
+        const pixelSize = 2; 
+        c.fillStyle = 'white'; 
+
+        const lineY = yPos + 4; 
+        const lineWidth = 20; 
+        const startX = xPos - (lineWidth / 2);
+
+        for (let i = 0; i <= lineWidth; i += pixelSize * 2) {
+             c.fillRect(startX + i, lineY, pixelSize, pixelSize);
+        }
+
+        c.fillRect(xPos, lineY + (pixelSize * 2), pixelSize, pixelSize); 
+        c.fillRect(xPos - pixelSize, lineY + pixelSize, pixelSize, pixelSize); 
+        c.fillRect(xPos + pixelSize, lineY + pixelSize, pixelSize, pixelSize); 
+
+        c.restore();
+    }
+
     update(isEnemy = false, dt = 1) {
         this.draw(isEnemy);
+        this.drawLabel(); 
         
         if (!this.isAttacking && !this.isBlocking && !this.dead && !this.isStunned) {
             if (this.stamina < this.maxStamina) {
@@ -386,7 +458,9 @@ class Fighter extends Sprite {
             this.velocity.y = 0; 
             this.position.y = groundLevel - this.height; 
             
-            if (this.isBlocking || this.isStunned) this.velocity.x = 0;
+            if (this.isBlocking || this.isStunned) {
+                this.velocity.x = 0;
+            }
         } else {
             this.velocity.y += gravity * dt;
         }
@@ -402,13 +476,21 @@ class Fighter extends Sprite {
         this.stamina -= this.attackCost;
         this.switchSprite('attack1');
         this.isAttacking = true;
+        
+        // --- SES: SALDIRI ---
+        playSound(audioAttack);
+
         if ((myRole === 'player1' && this === player) || (myRole === 'player2' && this === enemy)) socket.emit('attack');
     }
 
     takeHit(attacker) {
         if (this.isBlocking && this.canParry) { if(attacker) attacker.getStunned(); return; }
         
+        // --- BLOK HALİNDE HASAR ALMA ---
         if (this.isBlocking) {
+            // SES: BLOK VURUŞU
+            playSound(audioBlockHit);
+
             this.health -= 2; 
             if (this.health <= 0) { 
                 this.switchSprite('death'); 
@@ -420,6 +502,9 @@ class Fighter extends Sprite {
             setTimeout(() => { this.isBlockHitting = false; }, 200);
             return;
         }
+
+        // --- NORMAL HASAR ALMA ---
+        playSound(audioHurt); // SES: HASAR
 
         this.health -= 10; 
         this.isStunned = true; 
@@ -501,11 +586,11 @@ const playerScale = 2.5;
 const commonOffset = { x: 96, y: 52 };
 const deathScale = 0.8; 
 const deathOffset = { x: 10, y: 10 }; 
-const blockScale = 0.6; 
+const blockScale = 1.2; 
 const blockOffset = { x: 60, y: -50 }; 
 
 const assetsP1 = {
-    idle: 'assets/idle.png', run: 'assets/run.png', attack: 'assets/attack.png', hurt: 'assets/hurt.png', die: 'assets/die.png', block: 'assets/block.png', blockHit: 'assets/blockHit.png'
+    idle: 'assets/idle.png', run: 'assets/run.png', attack: 'assets/attack.png', hurt: 'assets/hurt.png', die: 'assets/die.png', block: 'assets/block.png', blockHit: 'assets/blockhit.png'
 };
 
 const assetsP2 = {
@@ -514,6 +599,7 @@ const assetsP2 = {
 
 const player = new Fighter({
     position: { x: 100, y: 0 }, velocity: { x: 0, y: 0 }, imgSrc: assetsP1.idle, framesMax: 10, scale: playerScale, offset: commonOffset,
+    color: 'red',
     sprites: {
         idle: { imageSrc: assetsP1.idle, framesMax: 10, offset: commonOffset },
         run: { imageSrc: assetsP1.run, framesMax: 16, offset: commonOffset },
@@ -527,6 +613,7 @@ const player = new Fighter({
 
 const enemy = new Fighter({
     position: { x: 800, y: 100 }, velocity: { x: 0, y: 0 }, color: 'blue', imgSrc: assetsP2.idle, framesMax: 10, scale: playerScale, offset: commonOffset,
+    color: 'blue',
     sprites: {
         idle: { imageSrc: assetsP2.idle, framesMax: 10, offset: commonOffset },
         run: { imageSrc: assetsP2.run, framesMax: 16, offset: commonOffset },
@@ -575,16 +662,11 @@ function animate() {
     const dt = (now - lastTime) / (1000 / 60); 
     lastTime = now;
 
-    // 1. Ekranı temizle
     c.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // 2. Arkaplanı Çiz (En Arkada)
+    c.fillStyle = '#2e7d32'; c.fillRect(0, 0, canvas.width, canvas.height);
     background.update(dt); 
-    
-    // 3. Zemini Çiz (Ön Plan Katmanı - Tam Ekran)
     ground.update();
 
-    // 4. Karakterleri Çiz (En Önde)
     player.update(false, dt); 
     enemy.update(true, dt); 
     updateHealthBars();
@@ -649,18 +731,33 @@ window.addEventListener('keydown', (event) => {
         switch (event.key) {
             case 'd': if(!me.isBlocking) { keys.d.pressed = true; me.lastKey = 'd'; } break;
             case 'a': if(!me.isBlocking) { keys.a.pressed = true; me.lastKey = 'a'; } break;
-            case 'w': if(!me.isBlocking && me.velocity.y === 0) me.velocity.y = -15; break;
+            
+            case 'w': 
+                if(!me.isBlocking && me.velocity.y === 0) me.velocity.y = -15; 
+                break;
+                
             case ' ': event.preventDefault(); me.attack(); break;
+            
+            // ANINDA BLOK
             case 's': 
-                me.isBlocking = true; 
-                me.canParry = true; 
-                me.velocity.x = 0; 
-                setTimeout(() => { me.canParry = false; }, 400); 
+                if (!me.isBlocking) {
+                    me.isBlocking = true; 
+                    me.canParry = true; 
+                    me.velocity.x = 0; 
+                    setTimeout(() => { me.canParry = false; }, 400); 
+                }
                 break;
             case 'ArrowRight': if(!me.isBlocking) { keys.d.pressed = true; me.lastKey = 'd'; } break;
             case 'ArrowLeft': if(!me.isBlocking) { keys.a.pressed = true; me.lastKey = 'a'; } break;
             case 'ArrowUp': if(!me.isBlocking && me.velocity.y === 0) me.velocity.y = -15; break;
-            case 'ArrowDown': me.isBlocking = true; me.velocity.x = 0; break;
+            case 'ArrowDown': 
+                if (!me.isBlocking) {
+                    me.isBlocking = true; 
+                    me.canParry = true;
+                    me.velocity.x = 0; 
+                    setTimeout(() => { me.canParry = false; }, 400); 
+                }
+                break;
             case '0': me.attack(); break;
         }
     }
@@ -677,7 +774,11 @@ window.addEventListener('keyup', (event) => {
     switch (event.key) { 
         case 'd': keys.d.pressed = false; break; 
         case 'a': keys.a.pressed = false; break; 
-        case 's': me.isBlocking = false; me.canParry = false; emitMyState(me); break; 
+        case 's': 
+            me.isBlocking = false; 
+            me.canParry = false; 
+            emitMyState(me);
+            break; 
         case 'ArrowRight': keys.d.pressed = false; break; 
         case 'ArrowLeft': keys.a.pressed = false; break; 
         case 'ArrowDown': me.isBlocking = false; me.canParry = false; emitMyState(me); break; 
