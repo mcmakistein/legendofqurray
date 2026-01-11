@@ -15,24 +15,30 @@ let gameRunning = false;
 let animationId;
 let lastTime = Date.now(); 
 
-// --- SES EFEKTLERİ (YENİ) ---
-// 1. Arkaplan Müziği
-const bgMusic = new Audio('assets/music.mp3');
-bgMusic.loop = true; 
-bgMusic.volume = 0.3; 
-let isMusicOn = true;
+// --- PING SİSTEMİ ---
+let lastPingTime = 0;
+// Her 1 saniyede bir ping ölç
+setInterval(() => {
+    lastPingTime = Date.now();
+    socket.emit('pingCheck');
+}, 1000);
 
-// 2. Efekt Sesleri
+socket.on('pongCheck', () => {
+    const latency = Date.now() - lastPingTime;
+    socket.emit('reportPing', latency); // Sunucuya bildir
+});
+
+// --- SESLER ---
+const bgMusic = new Audio('assets/music.mp3');
+bgMusic.loop = true; bgMusic.volume = 0.3; let isMusicOn = true;
 const audioAttack = new Audio('assets/attack.mp3');
 const audioHurt = new Audio('assets/hurt.mp3');
 const audioBlockHit = new Audio('assets/blockhit.mp3');
 
-// Seslerin üst üste binmesi için yardımcı fonksiyon
-// (Hızlı basınca sesin bitmesini beklemeden baştan çalar)
 function playSound(audio) {
     if (!audio) return;
-    audio.currentTime = 0; // Başa sar
-    audio.play().catch(e => console.log("Ses hatası:", e));
+    audio.currentTime = 0; 
+    audio.play().catch(e => {});
 }
 
 // HTML Elementleri
@@ -49,7 +55,10 @@ const scoreBoard = document.getElementById('scoreBoard');
 const transitionLayer = document.getElementById('transitionLayer');
 const musicBtn = document.getElementById('musicBtn');
 
-// --- KÜP GEÇİŞ ANİMASYONU ---
+// HUD Ping Elementleri (YENİ)
+const p1PingDisplay = document.getElementById('p1Ping');
+const p2PingDisplay = document.getElementById('p2Ping');
+
 function initTransition() {
     if (!transitionLayer) return;
     transitionLayer.innerHTML = '';
@@ -69,10 +78,6 @@ function triggerTransition(callback) {
         cubes.forEach((cube, index) => { setTimeout(() => { cube.classList.remove('active'); }, index * 5); });
     }, 1000);
 }
-
-// ==========================================
-// --- MENU VE LOBİ İŞLEMLERİ ---
-// ==========================================
 
 function joinGame() {
     const name = usernameInput.value;
@@ -115,7 +120,39 @@ socket.on('joined', (data) => {
     }
 });
 
+// --- LOBİ GÜNCELLEME (PING DAHİL) ---
 socket.on('updateLobby', (players) => {
+    updateLobbyUI(players); // Kod tekrarını önlemek için fonksiyona aldık
+});
+
+// --- PING GÜNCELLEME (Lobi ve Oyun İçi) ---
+socket.on('updatePings', (players) => {
+    // 1. Lobideki pingleri güncelle (Eğer lobideysek)
+    if (lobbyScreen.style.display !== 'none') {
+        updateLobbyUI(players);
+    }
+
+    // 2. Oyun içi HUD güncelle
+    const p1 = Object.values(players).find(p => p.role === 'player1');
+    const p2 = Object.values(players).find(p => p.role === 'player2');
+
+    if (p1 && p1PingDisplay) {
+        p1PingDisplay.innerText = p1.ping + 'ms';
+        p1PingDisplay.className = `ping-tag ${getPingClass(p1.ping)}`;
+    }
+    if (p2 && p2PingDisplay) {
+        p2PingDisplay.innerText = p2.ping + 'ms';
+        p2PingDisplay.className = `ping-tag ${getPingClass(p2.ping)}`;
+    }
+});
+
+function getPingClass(ms) {
+    if (ms < 100) return 'ping-good'; // Yeşil
+    if (ms < 200) return 'ping-med';  // Sarı
+    return 'ping-bad';                // Kırmızı
+}
+
+function updateLobbyUI(players) {
     playerListDiv.innerHTML = ''; 
     let p1 = null; let p2 = null; let spectators = 0;
 
@@ -127,7 +164,10 @@ socket.on('updateLobby', (players) => {
 
     const createSlot = (p, label) => `
         <div class="slot">
-            <span>${p ? p.name : label}</span>
+            <div style="display:flex; align-items:center;">
+                <span>${p ? p.name : label}</span>
+                ${p ? `<span class="lobby-ping ${getPingClass(p.ping)}">${p.ping}ms</span>` : ''}
+            </div>
             <span class="${p && p.isReady ? 'ready-yes' : 'ready-no'}">
                 ${p ? (p.isReady ? 'HAZIR' : 'BEKLİYOR') : ''}
             </span>
@@ -136,19 +176,17 @@ socket.on('updateLobby', (players) => {
     playerListDiv.innerHTML += createSlot(p1, 'Oyuncu 1 Bekleniyor...');
     playerListDiv.innerHTML += createSlot(p2, 'Oyuncu 2 Bekleniyor...');
     document.getElementById('spectatorArea').innerText = `İzleyiciler: ${spectators}`;
-});
+}
 
-// --- OYUN BAŞLATMA ---
 socket.on('gameStart', (data) => {
     lobbyScreen.style.display = 'none';
     gameOverScreen.style.display = 'none';
     gameContainer.style.display = 'block';
     statusText.innerText = "Rakip bekleniyor...";
     
-    // Müzik Başlat
     if (isMusicOn) {
         bgMusic.currentTime = 0; 
-        bgMusic.play().catch(e => console.log("Müzik hatası:", e));
+        bgMusic.play().catch(e => {});
     }
 
     if(data.scores) scoreBoard.innerText = `${data.scores.p1} - ${data.scores.p2}`;
@@ -477,7 +515,6 @@ class Fighter extends Sprite {
         this.switchSprite('attack1');
         this.isAttacking = true;
         
-        // --- SES: SALDIRI ---
         playSound(audioAttack);
 
         if ((myRole === 'player1' && this === player) || (myRole === 'player2' && this === enemy)) socket.emit('attack');
@@ -486,11 +523,8 @@ class Fighter extends Sprite {
     takeHit(attacker) {
         if (this.isBlocking && this.canParry) { if(attacker) attacker.getStunned(); return; }
         
-        // --- BLOK HALİNDE HASAR ALMA ---
         if (this.isBlocking) {
-            // SES: BLOK VURUŞU
             playSound(audioBlockHit);
-
             this.health -= 2; 
             if (this.health <= 0) { 
                 this.switchSprite('death'); 
@@ -503,9 +537,7 @@ class Fighter extends Sprite {
             return;
         }
 
-        // --- NORMAL HASAR ALMA ---
-        playSound(audioHurt); // SES: HASAR
-
+        playSound(audioHurt);
         this.health -= 10; 
         this.isStunned = true; 
         
@@ -731,11 +763,7 @@ window.addEventListener('keydown', (event) => {
         switch (event.key) {
             case 'd': if(!me.isBlocking) { keys.d.pressed = true; me.lastKey = 'd'; } break;
             case 'a': if(!me.isBlocking) { keys.a.pressed = true; me.lastKey = 'a'; } break;
-            
-            case 'w': 
-                if(!me.isBlocking && me.velocity.y === 0) me.velocity.y = -15; 
-                break;
-                
+            case 'w': if(!me.isBlocking && me.velocity.y === 0) me.velocity.y = -15; break;
             case ' ': event.preventDefault(); me.attack(); break;
             
             // ANINDA BLOK

@@ -446,3 +446,25 @@ input:focus {
     right: 0;
     position: absolute;
 }
+/* PING GÖSTERGESİ */
+.ping-tag {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 10px;
+    color: #00ff00; /* Varsayılan Yeşil */
+    text-shadow: 1px 1px 0 #000;
+    margin-top: 10px;
+}
+
+/* LOBİDEKİ PING İÇİN */
+.lobby-ping {
+    font-size: 10px;
+    margin-left: 10px;
+    padding: 2px 5px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 3px;
+    font-family: 'Press Start 2P', cursive;
+}
+
+.ping-good { color: #00ff00; } /* Yeşil */
+.ping-med { color: #ffff00; }  /* Sarı */
+.ping-bad { color: #ff0000; }  /* Kırmızı */

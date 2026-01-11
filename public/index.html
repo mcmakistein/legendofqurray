@@ -3,15 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <title>Legend of Qurray</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="assets/idle.png" type="image/png">
 </head>
 <body>
 
     <div id="loginScreen" class="menu-overlay">
         <div class="menu-box glass-effect">
             <h1 class="glitch-title">LEGEND OF QURRAY</h1>
-            <p class="subtitle">Beta-3169</p>
+            <p class="subtitle">Beta-6931</p>
             <div class="input-group">
                 <input type="text" id="usernameInput" placeholder="SAVAŞÇI ADI" maxlength="12">
             </div>
@@ -22,6 +24,7 @@
     <div id="lobbyScreen" class="menu-overlay" style="display: none;">
         <div class="menu-box glass-effect">
             <h2>LOBİ</h2>
+            
             <div id="playerList" class="player-list">
                 </div>
             
@@ -31,9 +34,9 @@
 
             <div class="lobby-buttons">
                 <button id="musicBtn" class="cyber-btn" onclick="toggleMusic()" style="margin-bottom: 10px; background: linear-gradient(90deg, #0088ff, #0055ff);">SES: AÇIK</button>
-                
                 <button id="readyBtn" class="cyber-btn" onclick="toggleReady()" disabled>HAZIR OL</button>
             </div>
+            
             <p id="statusText" class="pulsing-text">Rakip bekleniyor...</p>
         </div>
     </div>
@@ -57,7 +60,10 @@
                 <div class="stamina-bar-wrap">
                     <div class="stamina-bar-inner" id="p1Stamina"></div>
                 </div>
-                <div class="name-tag p1-tag" id="p1Name">Player 1</div>
+                <div style="display: flex; align-items: center; justify-content: flex-start; gap: 10px;">
+                    <div class="name-tag p1-tag" id="p1Name">Player 1</div>
+                    <div class="ping-tag" id="p1Ping">0ms</div>
+                </div>
             </div>
 
             <div class="timer-box">
@@ -73,12 +79,16 @@
                 <div class="stamina-bar-wrap p2-wrap">
                     <div class="stamina-bar-inner p2-stamina-bar" id="p2Stamina"></div>
                 </div>
-                <div class="name-tag p2-tag" id="p2Name">Player 2</div>
+                <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px;">
+                    <div class="ping-tag" id="p2Ping">0ms</div>
+                    <div class="name-tag p2-tag" id="p2Name">Player 2</div>
+                </div>
             </div>
         </div>
         
         <canvas></canvas>
     </div>
+
     <div id="transitionLayer" class="transition-layer"></div>
 
     <script src="/socket.io/socket.io.js"></script>

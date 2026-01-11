@@ -11,7 +11,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 let players = {};
 let gameStatus = 'LOBBY'; 
 let scores = { p1: 0, p2: 0 }; 
-let isRoundProcessing = false; // Kritik Kilit
+let isRoundProcessing = false;
 
 io.on('connection', (socket) => {
   console.log('Bağlantı:', socket.id);
@@ -25,7 +25,12 @@ io.on('connection', (socket) => {
     else if (!p2Exists) role = 'player2';
 
     players[socket.id] = {
-      id: socket.id, name: name, role: role, isReady: false, x: 0, y: 0
+      id: socket.id, 
+      name: name, 
+      role: role, 
+      isReady: false, 
+      x: 0, y: 0,
+      ping: 0 // YENİ: Başlangıç ping değeri
     };
 
     socket.emit('joined', { role: role });
@@ -33,6 +38,21 @@ io.on('connection', (socket) => {
     io.emit('updateLobby', players);
 
     if (gameStatus === 'PLAYING') socket.emit('gameStart', { players, scores });
+  });
+
+  // --- PING SİSTEMİ (YENİ) ---
+  // 1. Oyuncu sunucuya "Ping" atar, sunucu "Pong" diye geri döner (Ölçüm için)
+  socket.on('pingCheck', () => {
+      socket.emit('pongCheck');
+  });
+
+  // 2. Oyuncu hesapladığı pingi sunucuya bildirir
+  socket.on('reportPing', (ms) => {
+      if (players[socket.id]) {
+          players[socket.id].ping = ms;
+          // Tüm oyunculara güncel pingleri gönder
+          io.emit('updatePings', players); 
+      }
   });
 
   socket.on('playerReady', () => {
@@ -53,30 +73,24 @@ io.on('connection', (socket) => {
   });
 
   socket.on('updateState', (data) => { 
-      // Raunt bitiş işlemi sırasındaysa hareket verilerini yoksay
       if(!isRoundProcessing) socket.broadcast.emit('playerUpdated', data); 
   });
   
   socket.on('attack', () => { if(!isRoundProcessing) socket.broadcast.emit('enemyAttack'); });
   socket.on('hit', (data) => { if(!isRoundProcessing) socket.broadcast.emit('enemyHit', data); });
 
-  // --- ÖLÜM VE RAUNT YÖNETİMİ ---
   socket.on('playerDied', () => {
-    // Kilit varsa veya oyun oynamıyorsa işlemi durdur
     if (gameStatus !== 'PLAYING' || isRoundProcessing) return; 
-    
-    isRoundProcessing = true; // KİLİTLE
+    isRoundProcessing = true; 
     
     const loser = players[socket.id];
     if (!loser) return;
 
-    // Skoru tersine ver (Ölen kaybetti)
     if (loser.role === 'player1') scores.p2++;
     else if (loser.role === 'player2') scores.p1++;
 
     io.emit('updateScore', scores);
 
-    // OYUN BİTTİ Mİ? (2 Olan kazanır)
     if (scores.p1 >= 2 || scores.p2 >= 2) {
         gameStatus = 'FINISHED';
         let winnerName = scores.p1 > scores.p2 ? "OYUNCU 1" : "OYUNCU 2";
@@ -95,13 +109,11 @@ io.on('connection', (socket) => {
         }, 4000);
     } 
     else {
-        // --- YENİ RAUNT HAZIRLIĞI ---
-        io.emit('roundOver'); // Herkesi dondur
-        
+        io.emit('roundOver'); 
         setTimeout(() => {
             if(gameStatus === 'PLAYING') {
-                isRoundProcessing = false; // Kilidi aç
-                io.emit('startNextRound'); // Pozisyonları sıfırla ve başlat
+                isRoundProcessing = false; 
+                io.emit('startNextRound'); 
             }
         }, 3000);
     }
